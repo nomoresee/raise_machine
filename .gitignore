@@ -1,0 +1,18 @@
+# 忽略编译生成文件
+build/
+Debug/
+Release/
+
+# Keil / STM32 常见中间文件
+*.o
+*.d
+*.axf
+*.map
+*.hex
+*.bin
+*.lst
+*.dep
+
+# 编辑器配置
+.vscode/
+*.log
