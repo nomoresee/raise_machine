@@ -1,8 +1,4 @@
-#include "dm_motor_drv.h"
-#include "dm_motor_ctrl.h"
-#include "string.h"
-#include "stdbool.h"
-#include <cstdint>
+#include "headfile.h"
 
 motor_t motor[num];
 
@@ -28,17 +24,30 @@ void dm_motor_init(void)
 
 	// 设置Motor1的电机信息
 	motor[Motor1].id = 0x01;
-	motor[Motor1].mst_id = 0x00;	// 实际没有用上，只做标识作用
+	motor[Motor1].mst_id = 0x11;	
 	motor[Motor1].tmp.read_flag = 1;
-	motor[Motor1].ctrl.mode 	= spd_mode;
+	motor[Motor1].ctrl.mode 	= pos_mode;
 	motor[Motor1].ctrl.vel_set 	= 0.0f;
 	motor[Motor1].ctrl.pos_set 	= 0.0f;
 	motor[Motor1].ctrl.tor_set 	= 0.0f;
 	motor[Motor1].ctrl.cur_set 	= 0.0f;
-	motor[Motor1].ctrl.kd_set 	= 0.0f;
+	motor[Motor1].ctrl.kd_set 	= 1.0f;
 	motor[Motor1].tmp.PMAX		= 12.5f;
 	motor[Motor1].tmp.VMAX		= 30.0f;
 	motor[Motor1].tmp.TMAX		= 10.0f;
+// 设置Motor2的电机信息
+	motor[Motor2].id = 0x02;
+	motor[Motor2].mst_id = 0x12;
+	motor[Motor2].tmp.read_flag = 1;
+	motor[Motor2].ctrl.mode 	= spd_mode;
+	motor[Motor2].ctrl.vel_set 	= 0.0f;
+	motor[Motor2].ctrl.pos_set 	= 0.0f;
+	motor[Motor2].ctrl.tor_set 	= 0.0f;
+	motor[Motor2].ctrl.cur_set 	= 0.0f;
+	motor[Motor2].ctrl.kd_set 	= 1.0f;
+	motor[Motor2].tmp.PMAX		= 12.5f;
+	motor[Motor2].tmp.VMAX		= 30.0f;
+	motor[Motor2].tmp.TMAX		= 10.0f;
 }
 /**
 ************************************************************************
@@ -180,7 +189,7 @@ void receive_motor_data(motor_t *motor, uint8_t *data)
 * @param:      	void
 * @retval:     	void
 * @details:    	处理CAN1接收中断回调，根据接收到的ID和数据，执行相应的处理。
-*               当接收到ID为0时，调用dm4310_fbdata函数更新Motor的反馈数据。
+*               当接收到ID为0时，调用dm3519_fbdata函数更新Motor的反馈数据。
 ************************************************************************
 **/
 void fdcan1_rx_callback(void)
@@ -189,11 +198,28 @@ void fdcan1_rx_callback(void)
 	uint8_t rx_data[8] = {0};
 	uint8_t len;
 	len=fdcanx_receive(&hfdcan1, &rec_id, rx_data);
+
+  if(len==8)
+  {
+		switch (rec_id)
+			{
+				case 0x11: 
+				 dm_motor_fbdata(&motor[Motor1], rx_data);
+				 
+				 receive_motor_data(&motor[Motor1], rx_data);
+				 
+				 break;
+
+			    case 0x12:
+				 dm_motor_fbdata(&motor[Motor2], rx_data);
+				 receive_motor_data(&motor[Motor2], rx_data);
+				 break;
+
+				default: break;// 其他ID的处理
+			}
+
+  }
 	
-	//switch (rec_id)
-	//{
- 	//	case 0x201: dm3519_fbdata(&motor[Motor1], rx_data); break;
-	//}
 }
 
 

@@ -1,7 +1,4 @@
-#include "dm_motor_drv.h"
-#include "fdcan.h"
-#include "pid.h"
-
+#include "headfile.h"
 void dm3519_current_set(hcan_t* hcan, uint16_t id, float m1_cur_set, float m2_cur_set, float m3_cur_set, float m4_cur_set)
 {
 	uint8_t data[8];

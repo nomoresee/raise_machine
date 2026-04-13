@@ -18,18 +18,14 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "dm_motor_drv.h"
 #include "fdcan.h"
-#include "stm32h7xx_hal.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "bsp_fdcan.h"
-#include "delay.h"
-#include "dm_motor_ctrl.h"
+#include "headfile.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -39,7 +35,19 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define POS_REDUCTION_NUM          1.5f//输出端角度
+#define POS_REDUCTION_DEN          10.0f//电机端角度
+#define POS_TEST_OUTPUT_FWD_RAD    1000.0f
+#define POS_TEST_OUTPUT_HOME_RAD   0.0f//输出端回零角度
+#define POS_TEST_OUTPUT_VEL_LIMIT  40.0f//输出端速度限制
+#define POS_TEST_OUTPUT_ACC        8.0f//输出端加速度
+#define POS_TEST_FWD_RAD           (POS_TEST_OUTPUT_FWD_RAD * POS_REDUCTION_DEN / POS_REDUCTION_NUM)
+#define POS_TEST_HOME_RAD          (POS_TEST_OUTPUT_HOME_RAD * POS_REDUCTION_DEN / POS_REDUCTION_NUM)
+#define POS_TEST_VEL_LIMIT         (POS_TEST_OUTPUT_VEL_LIMIT * POS_REDUCTION_DEN / POS_REDUCTION_NUM)
+#define POS_ZERO_WAIT_MS           500U
+#define POS_HOLD_TIME_MS           1000U
+#define POS_PROFILE_POS_EPS        0.01f
+#define POS_PROFILE_DT_MAX         0.05f//防止某次程序卡了一下，比如过了 1 秒才进来，位置一下跳太多。现在最大按 0.05s 算
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -50,12 +58,31 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+typedef enum
+{
+    POS_TEST_SAVE_ZERO = 0,//保存当前位置为零点
+    POS_TEST_WAIT_ZERO,//等零点保存完成
+    POS_TEST_GO_1000RAD,//从 0 往 1000rad 走
+    POS_TEST_HOLD_1000RAD,//到 1000rad 后停 1 秒
+    POS_TEST_BACK_ZERO,//从 1000rad 回 0
+    POS_TEST_HOLD_ZERO//到 0 后停 1 秒，然后继续去 1000rad
+} pos_test_state_e;
+
+uint32_t print_tick = 0;//控制串口多久打印一次，现在是 100ms 打印一次
+uint32_t pos_test_tick = 0;//状态机计时用，比如停 1 秒、等 500ms
+uint32_t pos_profile_tick = 0;//梯形曲线每次更新时间用
+float pos_output_ref = POS_TEST_OUTPUT_HOME_RAD;//当前规划出来的“输出端目标位置”
+float vel_output_ref = 0.0f;//当前规划出来的“输出端目标速度”
+pos_test_state_e pos_test_state = POS_TEST_SAVE_ZERO;//当前状态机状态
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
+static void pos_1000_back_update(void);
+static void pos_profile_start(uint32_t now);
+static uint8_t pos_profile_update(float target_output_rad, uint32_t now);
 
 /* USER CODE END PFP */
 
@@ -65,9 +92,168 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   /* USER CODE BEGIN Callback 0 */
 	if (htim->Instance == TIM3) {
-		//dm3519_current_set(&hfdcan1, 0x200, 1.1f, 0.0f, 0.0f, 0.0f);
     dm_motor_ctrl_send(&hfdcan1, &motor[Motor1]);
+
+    // dm_motor_ctrl_send(&hfdcan1, &motor[Motor2]);
 	}
+}
+
+static float pos_absf(float value)//绝对值
+{
+    return (value >= 0.0f) ? value : -value;
+}
+
+static void pos_apply_output_ref(void)//计算目标速度和位置，并发送给电机
+{
+    motor[Motor1].ctrl.pos_set = pos_output_ref * POS_REDUCTION_DEN / POS_REDUCTION_NUM;
+    motor[Motor1].ctrl.vel_set = pos_absf(vel_output_ref) * POS_REDUCTION_DEN / POS_REDUCTION_NUM;
+}
+
+static void pos_hold_output(float output_pos_rad)//停在某个位置不动，速度设为 0，位置设为目标位置，并发送给电机
+{
+    pos_output_ref = output_pos_rad;
+    vel_output_ref = 0.0f;
+    pos_apply_output_ref();
+}
+
+static void pos_profile_start(uint32_t now)//规划速度清零，然后记录当前时间
+{
+    vel_output_ref = 0.0f;
+    pos_profile_tick = now;
+    pos_apply_output_ref();
+}
+
+static uint8_t pos_profile_update(float target_output_rad, uint32_t now)
+{
+    float dt = (now - pos_profile_tick) / 1000.0f;//第一步，算距离上次更新过去多久
+    float error;
+    float distance;
+    float direction;
+    float speed;
+    float stop_distance;
+    float step;
+
+    if (dt <= 0.0f)
+    {
+        pos_apply_output_ref();
+        return 0;
+    }
+
+    if (dt > POS_PROFILE_DT_MAX)
+    {
+        dt = POS_PROFILE_DT_MAX;
+    }
+
+    pos_profile_tick = now;
+
+    error = target_output_rad - pos_output_ref;//第二步，算当前位置和目标位置的误差
+    distance = pos_absf(error);
+    speed = pos_absf(vel_output_ref);
+
+    if ((distance <= POS_PROFILE_POS_EPS) && (speed <= POS_PROFILE_POS_EPS))
+    {
+        pos_hold_output(target_output_rad);
+        return 1;
+    }
+
+    direction = (error >= 0.0f) ? 1.0f : -1.0f;//第三步，算出当前位置和目标位置的方向
+    stop_distance = (speed * speed) / (2.0f * POS_TEST_OUTPUT_ACC);//判断什么时候该减速
+
+    if (stop_distance >= distance)
+    {
+        speed -= POS_TEST_OUTPUT_ACC * dt;
+    }
+    else
+    {
+        speed += POS_TEST_OUTPUT_ACC * dt;
+    }
+
+    if (speed > POS_TEST_OUTPUT_VEL_LIMIT)
+    {
+        speed = POS_TEST_OUTPUT_VEL_LIMIT;
+    }
+
+    if (speed < 0.0f)
+    {
+        speed = 0.0f;
+    }
+
+    step = speed * dt;
+    if (step >= distance)
+    {
+        pos_hold_output(target_output_rad);
+        return 1;
+    }
+
+    vel_output_ref = direction * speed;
+    pos_output_ref += vel_output_ref * dt;
+    pos_apply_output_ref();
+    return 0;
+}
+
+static void pos_1000_back_update(void)
+{
+    uint32_t now = HAL_GetTick();
+
+    switch (pos_test_state)
+    {
+        case POS_TEST_SAVE_ZERO:
+            pos_hold_output(POS_TEST_OUTPUT_HOME_RAD);
+            save_pos_zero(&hfdcan1, motor[Motor1].id, POS_MODE);
+            pos_test_tick = now;
+            pos_test_state = POS_TEST_WAIT_ZERO;
+            break;
+
+        case POS_TEST_WAIT_ZERO:
+            pos_hold_output(POS_TEST_OUTPUT_HOME_RAD);
+            if (now - pos_test_tick >= POS_ZERO_WAIT_MS)
+            {
+                pos_test_tick = now;
+                pos_profile_start(now);
+                pos_test_state = POS_TEST_GO_1000RAD;
+            }
+            break;
+
+        case POS_TEST_GO_1000RAD:
+            if (pos_profile_update(POS_TEST_OUTPUT_FWD_RAD, now))
+            {
+                pos_test_tick = now;
+                pos_test_state = POS_TEST_HOLD_1000RAD;
+            }
+            break;
+
+        case POS_TEST_HOLD_1000RAD:
+            pos_hold_output(POS_TEST_OUTPUT_FWD_RAD);
+            if (now - pos_test_tick >= POS_HOLD_TIME_MS)
+            {
+                pos_test_tick = now;
+                pos_profile_start(now);
+                pos_test_state = POS_TEST_BACK_ZERO;
+            }
+            break;
+
+        case POS_TEST_BACK_ZERO:
+            if (pos_profile_update(POS_TEST_OUTPUT_HOME_RAD, now))
+            {
+                pos_test_tick = now;
+                pos_test_state = POS_TEST_HOLD_ZERO;
+            }
+            break;
+
+        case POS_TEST_HOLD_ZERO:
+            pos_hold_output(POS_TEST_OUTPUT_HOME_RAD);
+            if (now - pos_test_tick >= POS_HOLD_TIME_MS)
+            {
+                pos_test_tick = now;
+                pos_profile_start(now);
+                pos_test_state = POS_TEST_GO_1000RAD;
+            }
+            break;
+
+        default:
+            pos_hold_output(POS_TEST_OUTPUT_HOME_RAD);
+            break;
+    }
 }
 /* USER CODE END 0 */
 
@@ -113,23 +299,39 @@ int main(void)
 	bsp_can_init();
 	dm_motor_init();
 	HAL_Delay(10);
-	//写控制模式
-	write_motor_data(motor[Motor1].id, 10, spd_mode, 0, 0, 0);
-	HAL_Delay(100);
+
+	motor[Motor1].ctrl.mode = pos_mode;
+	motor[Motor1].ctrl.pos_set = POS_TEST_HOME_RAD;
+	motor[Motor1].ctrl.vel_set = POS_TEST_VEL_LIMIT;
+
+	// Write control mode.
+	write_motor_data(motor[Motor1].id, 10, pos_mode, 0, 0, 0);
+	HAL_Delay(50);
+  save_motor_data(motor[Motor1].id, 10);
+	HAL_Delay(50);
+  //write_motor_data(motor[Motor2].id, 10, spd_mode, 0, 0, 0);
+	//HAL_Delay(50);
+ // save_motor_data(motor[Motor2].id, 10);
+	//HAL_Delay(50);
 //	write_motor_data(motor[Motor1].id, 35, CAN_BR_1M, 0, 0, 0);
 //	write_motor_data(motor[Motor1].id, 0x3C, 0, 0, 0, 0);
 //	HAL_Delay(100);
 //	read_motor_data(motor[Motor1].id, RID_CAN_BR); 
 //	dm_motor_disable(&hfdcan1, &motor[Motor1]);
 //	HAL_Delay(100);
-	save_motor_data(motor[Motor1].id, 10);
-	HAL_Delay(100);
+
   //清除错误标志，准备使能电机
   dm_motor_clear_err(&hfdcan1, &motor[Motor1]);
   HAL_Delay(100);
+  //dm_motor_clear_err(&hfdcan1, &motor[Motor2]);
+  //HAL_Delay(100);
 	dm_motor_enable(&hfdcan1, &motor[Motor1]);
-	HAL_Delay(1000);
+	HAL_Delay(100);
+	//dm_motor_enable(&hfdcan1, &motor[Motor2]);
+	//HAL_Delay(100);
+
 	HAL_TIM_Base_Start_IT(&htim3);
+  //save_pos_zero(&hfdcan1, motor[Motor1].id,POS_MODE);
 //	read_all_motor_data(&motor[Motor1]);
   /* USER CODE END 2 */
 
@@ -137,13 +339,26 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    pos_1000_back_update();
 
+    if (HAL_GetTick() - print_tick >= 100)
+    {
+        print_tick = HAL_GetTick();
+        //read_motor_data(motor[Motor1].id, RID_X_OUT);
+        printf("%d,%.2f,%.2f,%.2f,%.2f\r\n",
+               pos_test_state,
+               motor[Motor1].ctrl.pos_set * POS_REDUCTION_NUM / POS_REDUCTION_DEN,
+               motor[Motor1].ctrl.pos_set,
+               motor[Motor1].para.pos,
+               motor[Motor1].para.vel);
+    }
+    }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
-}
+
 
 /**
   * @brief System Clock Configuration
@@ -204,7 +419,12 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+int fputc(int ch, FILE *f)//重定向printf函数到串口
+{
+    uint8_t c = (uint8_t)ch;
+    HAL_UART_Transmit(&huart1, &c, 1, HAL_MAX_DELAY);
+    return ch;
+}
 /* USER CODE END 4 */
 
 /**
