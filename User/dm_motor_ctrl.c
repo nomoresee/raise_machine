@@ -39,7 +39,7 @@ void dm_motor_init(void)
 	motor[Motor2].id = 0x02;
 	motor[Motor2].mst_id = 0x12;
 	motor[Motor2].tmp.read_flag = 1;
-	motor[Motor2].ctrl.mode 	= spd_mode;
+	motor[Motor2].ctrl.mode 	= pos_mode;
 	motor[Motor2].ctrl.vel_set 	= 0.0f;
 	motor[Motor2].ctrl.pos_set 	= 0.0f;
 	motor[Motor2].ctrl.tor_set 	= 0.0f;
