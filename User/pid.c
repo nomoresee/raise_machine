@@ -33,6 +33,7 @@ void pid_para_init(pid_para_t *pid_config)
 * @param:      out_min：输出下限
 * @retval:     void
 * @details:    设置 PID 控制器的积分限幅和输出限幅范围
+
 ***********************************************************************
 **/
 void pid_limit_init(pid_para_t *pid_config, float i_term_max, float i_term_min,float out_max, float out_min)
