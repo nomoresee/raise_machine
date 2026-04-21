@@ -1,14 +1,11 @@
 #include "pid.h"
-//#include "common.h"
+
 /**
 ***********************************************************************
-* @brief:      pid_para_init()
-* @param[in]:	 pid_config  ָ��pid_para_t�ṹ���ָ��
-* @param[in]:	 kp  ��������
-* @param[in]:	 ki  ��������
-* @param[in]:	 kd  ΢������
+* @brief:      pid_para_init(pid_para_t *pid_config)
+* @param:      pid_config：指向 pid_para_t 结构体的指针
 * @retval:     void
-* @details:    ��ʼ��PID���������� 
+* @details:    初始化 PID 参数结构体中的各项参数
 ***********************************************************************
 **/
 void pid_para_init(pid_para_t *pid_config)
@@ -28,14 +25,14 @@ void pid_para_init(pid_para_t *pid_config)
 }
 /**
 ***********************************************************************
-* @brief:      pid_limit_init
-* @param[in]:	 pid_config  ָ��pid_para_t�ṹ���ָ��
-* @param[in]:	 i_term_max  ����������
-* @param[in]:	 i_term_min  ����������
-* @param[in]:	 out_max  �������
-* @param[in]:	 out_min  �������
+* @brief:      pid_limit_init(pid_para_t *pid_config, float i_term_max, float i_term_min, float out_max, float out_min)
+* @param:      pid_config：指向 pid_para_t 结构体的指针
+* @param:      i_term_max：积分项上限
+* @param:      i_term_min：积分项下限
+* @param:      out_max：输出上限
+* @param:      out_min：输出下限
 * @retval:     void
-* @details:    ����PID���������������������Ʒ�Χ 
+* @details:    设置 PID 控制器的积分限幅和输出限幅范围
 ***********************************************************************
 **/
 void pid_limit_init(pid_para_t *pid_config, float i_term_max, float i_term_min,float out_max, float out_min)
@@ -47,10 +44,10 @@ void pid_limit_init(pid_para_t *pid_config, float i_term_max, float i_term_min,f
 }
 /**
 ***********************************************************************
-* @brief:      pid_clear
-* @param[in]:	 pid_clear  ָ��pid_para_t�ṹ���ָ��
+* @brief:      pid_clear(pid_para_t *pid_clear)
+* @param:      pid_clear：指向 pid_para_t 结构体的指针
 * @retval:     void
-* @details:    ���PID����������ʷ״̬ 
+* @details:    清除 PID 控制器的历史状态量
 ***********************************************************************
 **/
 void pid_clear(pid_para_t *pid_clear)
@@ -64,13 +61,13 @@ void pid_clear(pid_para_t *pid_clear)
 }
 /**
 ***********************************************************************
-* @brief:      pid_reset()
-* @param[in]:	 pid_config  ָ��pid_para_t�ṹ���ָ��
-* @param[in]:	 kp  ��������
-* @param[in]:	 ki  ��������
-* @param[in]:	 kd  ΢������
+* @brief:      pid_reset(pid_para_t *pid_config, float kp, float ki, float kd)
+* @param:      pid_config：指向 pid_para_t 结构体的指针
+* @param:      kp：比例系数
+* @param:      ki：积分系数
+* @param:      kd：微分系数
 * @retval:     void
-* @details:    pid�����������޸� 
+* @details:    重设 PID 控制器的比例、积分和微分参数
 ***********************************************************************
 **/
 void pid_reset(pid_para_t *pid_config, float kp, float ki, float kd)
@@ -81,12 +78,12 @@ void pid_reset(pid_para_t *pid_config, float kp, float ki, float kd)
 }
 /**
 ***********************************************************************
-* @brief:     	pid_ctrl
-* @param[in]:	pid  ָ��pid_para_t�ṹ���ָ��
-* @param[in]:	ref_value  Ŀ��ֵ
-* @param[in]:	fback_value  ʵ��ֵ
-* @retval:   	float  PI�����������ֵ
-* @details:  	ʵ��PI�������ļ����߼� 
+* @brief:      parallel_pid_ctrl(pid_para_t *pid, float ref_value, float fdback_value)
+* @param:      pid：指向 pid_para_t 结构体的指针
+* @param:      ref_value：目标值
+* @param:      fdback_value：反馈值
+* @retval:     float
+* @details:    实现并联式 PID 控制算法，并返回控制输出
 ***********************************************************************
 **/
 float parallel_pid_ctrl(pid_para_t *pid, float ref_value, float fdback_value) 
@@ -96,26 +93,26 @@ float parallel_pid_ctrl(pid_para_t *pid, float ref_value, float fdback_value)
 	
 	pid->error = pid->ref_value - pid->fback_value;
 	
-	// ���������
+	// 计算比例项
 	pid->p_term = pid->kp * pid->error;
 	
-	// ���������
+	// 计算积分项
 	pid->i_term += pid->ki * pid->error;
 
-	// ���ƻ����Χ
+	// 对积分项进行限幅
 	if (pid->i_term > pid->i_term_max)
 		pid->i_term = pid->i_term_max;
 	else if (pid->i_term < pid->i_term_min)
 		pid->i_term = pid->i_term_min;
 	
-	// ����΢����
+	// 计算微分项
 	pid->d_term = pid->kd * (pid->error - pid->pre_err);
 	pid->pre_err = pid->error;
 	
-	// ��������������P��I��D�
+	// 计算总输出值
 	pid->out_value = pid->p_term + pid->i_term + pid->d_term;
 	
-	// ���������Χ
+	// 对输出值进行限幅
 	if (pid->out_value > pid->out_max)
 		pid->out_value = pid->out_max;
 	else if (pid->out_value < pid->out_min)
@@ -124,7 +121,16 @@ float parallel_pid_ctrl(pid_para_t *pid, float ref_value, float fdback_value)
 	return pid->out_value;
 }
 
-
+/**
+***********************************************************************
+* @brief:      serial_pid_ctrl(pid_para_t *pid, float ref_value, float fdback_value)
+* @param:      pid：指向 pid_para_t 结构体的指针
+* @param:      ref_value：目标值
+* @param:      fdback_value：反馈值
+* @retval:     float
+* @details:    实现串联式 PI 控制算法，并返回控制输出
+***********************************************************************
+**/
 float serial_pid_ctrl(pid_para_t *pid, float ref_value, float fdback_value)
 {
 	pid->ref_value = ref_value;
@@ -151,6 +157,3 @@ float serial_pid_ctrl(pid_para_t *pid, float ref_value, float fdback_value)
 	
 	return pid->out_value;
 }
-
-
-

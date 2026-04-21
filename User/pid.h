@@ -1,56 +1,42 @@
 #ifndef __PID_H__
 #define __PID_H__
 
- #include "main.h"
+#include "main.h"
 
 typedef struct
 {
-	volatile float kp;						// ±ÈÀı
-	volatile float ki;						// »ı·Ö
-	volatile float kd;						// Î¢·Ö
-	
-	volatile float p_term;				// ±ÈÀıÏî
-	volatile float i_term;				// »ı·ÖÏî
-	volatile float d_term;				// Î¢·ÖÏî
-	
-	volatile float i_term_max;		// »ı·ÖÀÛ¼ÓÏŞ·ù
-	volatile float i_term_min;		// »ı·ÖÀÛ¼ÓÏŞ·ù
-	
-	volatile float ctrl_period;		//¿ØÖÆÖÜÆÚ
-	
-	volatile float ref_value;			// Ä¿±êÖµ
-	volatile float fback_value;		// Êµ¼ÊÖµ
-	
-	volatile float error;					// Îó²î
-	volatile float pre_err;				// ÉÏÒ»´ÎÎó²î
-	
-	volatile float out_min;				// Êä³öÏŞ·ù
-	volatile float out_max;				// Êä³öÏŞ·ù
-	
-	volatile float out_value;
-	
-}pid_para_t;
+	volatile float kp;              // æ¯”ä¾‹ç³»æ•°
+	volatile float ki;              // ç§¯åˆ†ç³»æ•°
+	volatile float kd;              // å¾®åˆ†ç³»æ•°
+
+	volatile float p_term;          // æ¯”ä¾‹é¡¹
+	volatile float i_term;          // ç§¯åˆ†é¡¹
+	volatile float d_term;          // å¾®åˆ†é¡¹
+
+	volatile float i_term_max;      // ç§¯åˆ†é¡¹ä¸Šé™
+	volatile float i_term_min;      // ç§¯åˆ†é¡¹ä¸‹é™
+
+	volatile float ctrl_period;     // æ§åˆ¶å‘¨æœŸ
+
+	volatile float ref_value;       // ç›®æ ‡å€¼
+	volatile float fback_value;     // åé¦ˆå€¼
+
+	volatile float error;           // å½“å‰è¯¯å·®
+	volatile float pre_err;         // ä¸Šä¸€æ¬¡è¯¯å·®
+
+	volatile float out_min;         // è¾“å‡ºä¸‹é™
+	volatile float out_max;         // è¾“å‡ºä¸Šé™
+
+	volatile float out_value;       // è¾“å‡ºå€¼
+
+} pid_para_t;
 
 void pid_para_init(pid_para_t *pid_config);
-void pid_limit_init(pid_para_t *pid_config, float i_term_max, float i_term_min,float out_max, float out_min);
+void pid_limit_init(pid_para_t *pid_config, float i_term_max, float i_term_min, float out_max, float out_min);
 void pid_clear(pid_para_t *pid_clear);
 void pid_reset(pid_para_t *pid_config, float kp, float ki, float kd);
 float parallel_pid_ctrl(pid_para_t *pi, float ref_value, float fback_value);
 float serial_pid_ctrl(pid_para_t *pid, float ref_value, float fdback_value);
 float serial_pid_ctrl1(pid_para_t *pid, float ref_value, float fdback_value, float i_max, float out_max);
+
 #endif /* __PID_H__ */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
