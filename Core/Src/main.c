@@ -102,6 +102,8 @@ int main(void)
   MX_TIM3_Init();
   MX_USART1_UART_Init();
   MX_TIM4_Init();
+  MX_TIM2_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
   power(1);
   HAL_Delay(1000);
@@ -113,14 +115,22 @@ int main(void)
 
   pos_test_init(&hfdcan1, Motor1);
   HAL_TIM_Base_Start_IT(&htim3);
-/* USER CODE END 2 */
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, GPIO_PIN_SET);
+  /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-     pos_test_update();
-     pos_test_print_100ms();
+    //  pos_test_update();
+    //  pos_test_print_100ms();
+    servo_sync_move(180.0f, 180.0f);
+    HAL_Delay(1000);
+
+    servo_sync_move(0.0f, 0.0f);
+    HAL_Delay(1500);
   }
     /* USER CODE END WHILE */
 
