@@ -57,14 +57,13 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+static float pos_target = 100.0f;
+static float pos_vel = 0.3f;
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   /* USER CODE BEGIN Callback 0 */
-    if (htim->Instance == TIM3)
-    {
-      //dm_motor_ctrl_send(&hfdcan1, &motor[Motor2]);
-        pos_test_ctrl_send();
-    }
+    (void)htim;
   /* USER CODE END Callback 0 */
 }
 /* USER CODE END 0 */
@@ -81,11 +80,7 @@ int main(void)
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
-
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
-
-  /* USER CODE BEGIN Init */
+ 
 
   /* USER CODE END Init */
 
@@ -113,8 +108,28 @@ int main(void)
   dm_motor_init();
   HAL_Delay(10);
 
-  pos_test_init(&hfdcan1, Motor1);
-  HAL_TIM_Base_Start_IT(&htim3);
+  motor[Motor1].ctrl.mode = pos_mode;
+  motor[Motor2].ctrl.mode = pos_mode;
+
+  save_pos_zero(&hfdcan1, motor[Motor1].id, POS_MODE);
+  HAL_Delay(100);
+  save_pos_zero(&hfdcan1, motor[Motor2].id, POS_MODE);
+  HAL_Delay(100);
+
+  dm_motor_clear_err(&hfdcan1, &motor[Motor1]);
+  HAL_Delay(50);
+  dm_motor_clear_err(&hfdcan1, &motor[Motor2]);
+  HAL_Delay(50);
+
+  dm_motor_enable(&hfdcan1, &motor[Motor1]);
+  HAL_Delay(50);
+  dm_motor_enable(&hfdcan1, &motor[Motor2]);
+  HAL_Delay(50);
+
+  pos_pid_sync_init(&hfdcan1, Motor1, Motor2);
+  pos_pid_sync_set_target(pos_target);
+  pos_pid_sync_set_max_vel(pos_vel);
+
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, GPIO_PIN_SET);
@@ -124,13 +139,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    //  pos_test_update();
-    //  pos_test_print_100ms();
-    servo_sync_move(180.0f, 180.0f);
-    HAL_Delay(1000);
-
-    servo_sync_move(0.0f, 0.0f);
-    HAL_Delay(1500);
+    pos_pid_sync_process();
   }
     /* USER CODE END WHILE */
 

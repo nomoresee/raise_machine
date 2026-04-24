@@ -10,12 +10,13 @@
 #include "bsp_fdcan.h"
 #include "dm_motor_drv.h"
 #include "dm_motor_ctrl.h"
+#include "motor_angle/motor_angle.h"
+#include "pos_sync/pos_pid_sync.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 #include "stdbool.h"
 #include "math.h"
-#include "pos_test.h"
 #include "servo.h"
 
 

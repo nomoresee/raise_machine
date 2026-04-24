@@ -13,6 +13,11 @@
 #define SERVO_SYNC_STEP_DELAY_MS 20U
 #define SERVO1_SYNC_STEP_DEG     2.0f
 #define SERVO2_SYNC_STEP_DEG     2.0f
+#define SERVO1_GRIP_OPEN_ANGLE   15.0f
+#define SERVO1_GRIP_CLOSE_ANGLE  90.0f
+#define SERVO1_GRIP_STEP_DEG      4.0f
+#define SERVO1_GRIP_STEP_DELAY_MS 30U
+#define SERVO1_GRIP_HOLD_MS      500U
 
 float servo_clamp_angle(float angle_deg);
 uint32_t servo_angle_to_compare(float angle_deg);
@@ -24,6 +29,8 @@ void servo_set_angle(TIM_HandleTypeDef *htim, uint32_t channel, float angle_deg)
 void servo_set_pulse_us(TIM_HandleTypeDef *htim, uint32_t channel, uint32_t pulse_us);
 void servo1_set_angle(float angle_deg);
 void servo1_set_pulse_us(uint32_t pulse_us);
+void servo1_move_gradual(float start_angle, float target_angle, float step_deg, uint32_t step_delay_ms);
+void servo1_grip_cycle(void);
 void servo2_set_angle(float angle_deg);
 void servo2_set_pulse_us(uint32_t pulse_us);
 void servo_sync_move(float servo1_target_deg, float servo2_target_deg);

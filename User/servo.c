@@ -264,6 +264,64 @@ void servo1_set_pulse_us(uint32_t pulse_us)
 
 /**
 ************************************************************************
+* @brief:       servo1_move_gradual(float start_angle, float target_angle, float step_deg, uint32_t step_delay_ms)
+* @param:       start_angle：舵机1起始角度，单位为度
+* @param:       target_angle：舵机1目标角度，单位为度
+* @param:       step_deg：每次更新的步进角度，单位为度
+* @param:       step_delay_ms：每次步进后的延时，单位为 ms
+* @retval:      void
+* @details:     控制舵机1按指定步进逐渐转到目标角度，避免直接跳变造成机械冲击。
+************************************************************************
+**/
+void servo1_move_gradual(float start_angle, float target_angle, float step_deg, uint32_t step_delay_ms)
+{
+    float angle = start_angle;
+
+    if (target_angle >= start_angle)
+    {
+        while (angle < target_angle)
+        {
+            servo1_set_angle(angle);
+            HAL_Delay(step_delay_ms);
+            angle += step_deg;
+        }
+    }
+    else
+    {
+        while (angle > target_angle)
+        {
+            servo1_set_angle(angle);
+            HAL_Delay(step_delay_ms);
+            angle -= step_deg;
+        }
+    }
+
+    servo1_set_angle(target_angle);
+}
+
+/**
+************************************************************************
+* @brief:       servo1_grip_cycle(void)
+* @retval:      void
+* @details:     舵机1执行一次闭合再打开动作，开合角度、速度和保持时间由 servo.h 中的宏控制。
+************************************************************************
+**/
+void servo1_grip_cycle(void)
+{
+    servo1_move_gradual(SERVO1_GRIP_OPEN_ANGLE,
+                        SERVO1_GRIP_CLOSE_ANGLE,
+                        SERVO1_GRIP_STEP_DEG,
+                        SERVO1_GRIP_STEP_DELAY_MS);
+    HAL_Delay(SERVO1_GRIP_HOLD_MS);
+
+    servo1_move_gradual(SERVO1_GRIP_CLOSE_ANGLE,
+                        SERVO1_GRIP_OPEN_ANGLE,
+                        SERVO1_GRIP_STEP_DEG,
+                        SERVO1_GRIP_STEP_DELAY_MS);
+}
+
+/**
+************************************************************************
 * @brief:      	servo2_set_angle(float angle_deg)
 * @param:      	angle_deg：输入的舵机2角度，单位为度
 * @retval:     	void
