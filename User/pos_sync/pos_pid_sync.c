@@ -1,24 +1,25 @@
 #include "headfile.h"
 
-#define POS_PID_SYNC_PERIOD_MS       20U
-#define POS_PID_SYNC_PRINT_MS        100U
+#define POS_PID_SYNC_PERIOD_MS       20U///pid计算周期
+
+#define POS_PID_SYNC_PRINT_MS        100U//打印周期
 
 #define POS_PID_SYNC_MOTOR1_DIR      1.0f
 #define POS_PID_SYNC_MOTOR2_DIR      1.0f
 
-#define POS_PID_SYNC_POS_KP          0.20f
+#define POS_PID_SYNC_POS_KP          0.20f//整体位置外环，判断两台电机平均位置离目标还有多远
 #define POS_PID_SYNC_POS_KI          0.0f
 #define POS_PID_SYNC_POS_KD          0.0f
 #define POS_PID_SYNC_POS_OUT_MAX     5.0f
 #define POS_PID_SYNC_POS_OUT_MIN    -5.0f
 
-#define POS_PID_SYNC_BAL_KP          0.10f
+#define POS_PID_SYNC_BAL_KP          0.10f//同步修正环，判断 Motor1 和 Motor2 之间差多少
 #define POS_PID_SYNC_BAL_KI          0.0f
 #define POS_PID_SYNC_BAL_KD          0.0f
 #define POS_PID_SYNC_BAL_OUT_MAX     2.0f
 #define POS_PID_SYNC_BAL_OUT_MIN    -2.0f
 
-#define POS_PID_SYNC_VEL_KP          0.50f
+#define POS_PID_SYNC_VEL_KP          0.50f//速度给定环，根据位置误差和当前速度算下发速度
 #define POS_PID_SYNC_VEL_KI          0.0f
 #define POS_PID_SYNC_VEL_KD          0.0f
 #define POS_PID_SYNC_VEL_OUT_MAX     20.0f
@@ -239,63 +240,63 @@ void pos_pid_sync_set_max_vel(float max_vel)
 **/
 void pos_pid_sync_process(void)
 {
-    motor_t *motor1;
-    motor_t *motor2;
-    uint32_t now_tick;
-    float motor1_pos;
-    float motor2_pos;
-    float motor1_vel;
-    float motor2_vel;
-    float avg_pos;
-    float avg_vel;
-    float pos_offset;
-    float balance_offset;
-    float cmd_vel;
-    float motor1_cmd_pos;
-    float motor2_cmd_pos;
+    motor_t *motor1;        // 电机 1 的控制结构体指针，用于读取反馈并下发控制量。
+    motor_t *motor2;        // 电机 2 的控制结构体指针，用于读取反馈并下发控制量。
+    uint32_t now_tick;      // 当前系统毫秒计时，用来控制 PID 计算周期和打印周期。
+    float motor1_pos;       // 电机 1 按同步方向修正后的实际位置反馈。
+    float motor2_pos;       // 电机 2 按同步方向修正后的实际位置反馈。
+    float motor1_vel;       // 电机 1 按同步方向修正后的实际速度反馈。
+    float motor2_vel;       // 电机 2 按同步方向修正后的实际速度反馈。
+    float avg_pos;          // 两台电机的平均位置，代表双电机系统的整体当前位置。
+    float avg_vel;          // 两台电机速度绝对值的平均值，代表当前整体运动速度。
+    float pos_offset;       // 位置外环输出，用平均位置误差计算整体位置补偿量。
+    float balance_offset;   // 同步平衡环输出，用两电机位置差计算左右同步修正量。
+    float cmd_vel;          // 最终下发给位置模式的输出轴速度限制。
+    float motor1_cmd_pos;   // 电机 1 在统一方向坐标系下的目标位置。
+    float motor2_cmd_pos;   // 电机 2 在统一方向坐标系下的目标位置。
 
-    if (pos_pid_sync.hcan == NULL)
+    if (pos_pid_sync.hcan == NULL) // CAN 句柄未初始化时不能下发控制帧，直接退出保护。
     {
-        return;
+        return; // 等待 pos_pid_sync_init() 完成初始化后再运行同步控制。
     }
 
-    now_tick = HAL_GetTick();
-    if ((now_tick - pos_pid_sync.ctrl_tick) < POS_PID_SYNC_PERIOD_MS)
+    now_tick = HAL_GetTick(); // 读取当前系统时间，单位为 ms。
+    if ((now_tick - pos_pid_sync.ctrl_tick) < POS_PID_SYNC_PERIOD_MS) // 未到控制周期时不重复计算 PID。
     {
-        return;
+        return; // 保持上一次下发的控制量，避免控制频率过高。
     }
-    pos_pid_sync.ctrl_tick = now_tick;
+    pos_pid_sync.ctrl_tick = now_tick; // 记录本次控制时间，作为下一次周期判断的基准。
 
-    motor1 = &motor[pos_pid_sync.motor1_index];
-    motor2 = &motor[pos_pid_sync.motor2_index];
-    motor_angle_update();
+    motor1 = &motor[pos_pid_sync.motor1_index]; // 根据初始化时保存的索引找到电机 1。
+    motor2 = &motor[pos_pid_sync.motor2_index]; // 根据初始化时保存的索引找到电机 2。
+    motor_angle_update(); // 更新两台电机的多圈位置，保证后续位置反馈是最新值。
 
-    motor1_pos = POS_PID_SYNC_MOTOR1_DIR * motor_angle_get(pos_pid_sync.motor1_index);
-    motor2_pos = POS_PID_SYNC_MOTOR2_DIR * motor_angle_get(pos_pid_sync.motor2_index);
-    motor1_vel = POS_PID_SYNC_MOTOR1_DIR * motor1->para.vel;
-    motor2_vel = POS_PID_SYNC_MOTOR2_DIR * motor2->para.vel;
-    avg_pos = 0.5f * (motor1_pos + motor2_pos);
-    avg_vel = 0.5f * (pos_pid_sync_absf(motor1_vel) + pos_pid_sync_absf(motor2_vel));
+    motor1_pos = POS_PID_SYNC_MOTOR1_DIR * motor_angle_get(pos_pid_sync.motor1_index); // 读取电机 1 位置，并用方向系数统一正方向。
+    motor2_pos = POS_PID_SYNC_MOTOR2_DIR * motor_angle_get(pos_pid_sync.motor2_index); // 读取电机 2 位置，并用方向系数统一正方向。
+    motor1_vel = POS_PID_SYNC_MOTOR1_DIR * motor1->para.vel; // 读取电机 1 速度，并用方向系数统一正方向。
+    motor2_vel = POS_PID_SYNC_MOTOR2_DIR * motor2->para.vel; // 读取电机 2 速度，并用方向系数统一正方向。
+    avg_pos = 0.5f * (motor1_pos + motor2_pos); // 计算平均位置，用于判断整体距离目标位置还有多远。
+    avg_vel = 0.5f * (pos_pid_sync_absf(motor1_vel) + pos_pid_sync_absf(motor2_vel)); // 计算平均速度幅值，用于速度环反馈。
 
-    pos_offset = parallel_pid_ctrl(&pos_pid_sync.pos_pid, pos_pid_sync.target_pos, avg_pos);
-    balance_offset = parallel_pid_ctrl(&pos_pid_sync.balance_pid, 0.0f, motor1_pos - motor2_pos);
-    cmd_vel = parallel_pid_ctrl(&pos_pid_sync.vel_pid, pos_pid_sync_absf(pos_offset), avg_vel);
-    cmd_vel = pos_pid_sync_clampf(cmd_vel, 0.0f, pos_pid_sync.max_output_vel);
+    pos_offset = parallel_pid_ctrl(&pos_pid_sync.pos_pid, pos_pid_sync.target_pos, avg_pos); // 位置外环：目标位置与平均位置做 PID，输出整体位置补偿。
+    balance_offset = parallel_pid_ctrl(&pos_pid_sync.balance_pid, 0.0f, motor1_pos - motor2_pos); // 同步环：目标位置差为 0，输出两台电机的反向修正量。
+    cmd_vel = parallel_pid_ctrl(&pos_pid_sync.vel_pid, pos_pid_sync_absf(pos_offset), avg_vel); // 速度环：位置误差越大，允许速度越高；接近目标后速度降低。
+    cmd_vel = pos_pid_sync_clampf(cmd_vel, 0.0f, pos_pid_sync.max_output_vel); // 限制输出轴速度，防止速度指令超出允许范围。
 
-    motor1_cmd_pos = pos_pid_sync.target_pos + pos_offset - balance_offset;
-    motor2_cmd_pos = pos_pid_sync.target_pos + pos_offset + balance_offset;
+    motor1_cmd_pos = pos_pid_sync.target_pos + pos_offset - balance_offset; // 电机 1 目标位置 = 公共目标 + 整体补偿 - 同步修正。
+    motor2_cmd_pos = pos_pid_sync.target_pos + pos_offset + balance_offset; // 电机 2 目标位置 = 公共目标 + 整体补偿 + 同步修正。
 
-    pos_pid_sync_send(motor1, POS_PID_SYNC_MOTOR1_DIR * motor1_cmd_pos, cmd_vel);
-    pos_pid_sync_send(motor2, POS_PID_SYNC_MOTOR2_DIR * motor2_cmd_pos, cmd_vel);
+    pos_pid_sync_send(motor1, POS_PID_SYNC_MOTOR1_DIR * motor1_cmd_pos, cmd_vel); // 将电机 1 目标位置转回实际方向，并通过位置模式下发。
+    pos_pid_sync_send(motor2, POS_PID_SYNC_MOTOR2_DIR * motor2_cmd_pos, cmd_vel); // 将电机 2 目标位置转回实际方向，并通过位置模式下发。
 
-    if ((now_tick - pos_pid_sync.print_tick) >= POS_PID_SYNC_PRINT_MS)
+    if ((now_tick - pos_pid_sync.print_tick) >= POS_PID_SYNC_PRINT_MS) // 到达打印周期后输出调试数据。
     {
-        pos_pid_sync.print_tick = now_tick;
-        pos_pid_sync_vofa_print(motor1_pos,
-                                motor2_pos,
-                                motor1_pos - motor2_pos,
-                                motor1_vel,
-                                motor2_vel,
-                                motor1_vel - motor2_vel);
+        pos_pid_sync.print_tick = now_tick; // 更新时间戳，控制下一次 VOFA 打印间隔。
+        pos_pid_sync_vofa_print(motor1_pos,              // VOFA 通道 1：电机 1 统一方向后的位置反馈。
+                                motor2_pos,              // VOFA 通道 2：电机 2 统一方向后的位置反馈。
+                                motor1_pos - motor2_pos, // VOFA 通道 3：两台电机的位置同步误差。
+                                motor1_vel,              // VOFA 通道 4：电机 1 统一方向后的速度反馈。
+                                motor2_vel,              // VOFA 通道 5：电机 2 统一方向后的速度反馈。
+                                motor1_vel - motor2_vel); // VOFA 通道 6：两台电机的速度误差。
     }
 }

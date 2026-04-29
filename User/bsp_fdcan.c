@@ -146,8 +146,8 @@ uint8_t fdcanx_send_data(hcan_t *hfdcan, uint16_t id, uint8_t *data, uint32_t le
 		pTxHeader.DataLength = FDCAN_DLC_BYTES_64;
 	
     pTxHeader.ErrorStateIndicator=FDCAN_ESI_ACTIVE;
-    pTxHeader.BitRateSwitch=FDCAN_BRS_ON;
-    pTxHeader.FDFormat=FDCAN_FD_CAN;
+    pTxHeader.BitRateSwitch=FDCAN_BRS_OFF;//FDCAN_BRS_ON
+    pTxHeader.FDFormat=FDCAN_CLASSIC_CAN;//FDCAN_FRAME_CLASSIC
     pTxHeader.TxEventFifoControl=FDCAN_NO_TX_EVENTS;
     pTxHeader.MessageMarker=0;
  

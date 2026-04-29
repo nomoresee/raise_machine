@@ -52,13 +52,15 @@
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-
+ 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-static float pos_target = 100.0f;
-static float pos_vel = 0.3f;
+static float pos_target = 600.0f;
+static float pos_vel = 0.2f;
+static uint32_t servo2_toggle_tick = 0U;
+static uint8_t servo2_toggle_state = 0U;
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
@@ -80,7 +82,9 @@ int main(void)
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
- 
+
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  HAL_Init();
 
   /* USER CODE END Init */
 
@@ -125,13 +129,14 @@ int main(void)
   HAL_Delay(50);
   dm_motor_enable(&hfdcan1, &motor[Motor2]);
   HAL_Delay(50);
-
+////////电机同步操作。
   pos_pid_sync_init(&hfdcan1, Motor1, Motor2);
   pos_pid_sync_set_target(pos_target);
   pos_pid_sync_set_max_vel(pos_vel);
 
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+  servo2_toggle_tick = HAL_GetTick();
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, GPIO_PIN_SET);
   /* USER CODE END 2 */
 
@@ -139,7 +144,10 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+   
     pos_pid_sync_process();
+
+    
   }
     /* USER CODE END WHILE */
 
