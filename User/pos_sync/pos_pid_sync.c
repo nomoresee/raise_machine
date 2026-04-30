@@ -5,7 +5,7 @@
 #define POS_PID_SYNC_PRINT_MS        100U//打印周期
 
 #define POS_PID_SYNC_MOTOR1_DIR      1.0f
-#define POS_PID_SYNC_MOTOR2_DIR      1.0f
+#define POS_PID_SYNC_MOTOR2_DIR     -1.0f
 
 #define POS_PID_SYNC_POS_KP          0.20f//整体位置外环，判断两台电机平均位置离目标还有多远
 #define POS_PID_SYNC_POS_KI          0.0f
@@ -13,7 +13,7 @@
 #define POS_PID_SYNC_POS_OUT_MAX     5.0f
 #define POS_PID_SYNC_POS_OUT_MIN    -5.0f
 
-#define POS_PID_SYNC_BAL_KP          0.10f//同步修正环，判断 Motor1 和 Motor2 之间差多少
+#define POS_PID_SYNC_BAL_KP          0.2f//同步修正环，判断 Motor1 和 Motor2 之间差多少
 #define POS_PID_SYNC_BAL_KI          0.0f
 #define POS_PID_SYNC_BAL_KD          0.0f
 #define POS_PID_SYNC_BAL_OUT_MAX     2.0f
@@ -25,6 +25,9 @@
 #define POS_PID_SYNC_VEL_OUT_MAX     20.0f
 #define POS_PID_SYNC_VEL_OUT_MIN     0.5f
 #define POS_PID_SYNC_VEL_CMD_RATIO   30.0f
+
+#define POS_PID_SYNC_SM_DWELL_MS     2000U
+#define POS_PID_SYNC_SM_REACH_TOL    5.0f
 
 typedef struct
 {
@@ -41,6 +44,7 @@ typedef struct
 } pos_pid_sync_t;
 
 static pos_pid_sync_t pos_pid_sync;
+static const float pos_pid_sync_sm_targets[] = {1000.0f, 0.0f, -2000.0f, 0.0f};
 
 /**
 ***********************************************************************
@@ -102,7 +106,7 @@ static void pos_pid_sync_pid_init(pid_para_t *pid,
 {
     pid_para_init(pid);
     pid_reset(pid, kp, ki, kd);
-    pid_limit_init(pid, 0.0f, 0.0f, out_max, out_min);
+    pid_limit_init(pid, 1.0f, -1.0f, out_max, out_min);
     pid->ctrl_period = (float)POS_PID_SYNC_PERIOD_MS * 0.001f;
 }
 
@@ -228,6 +232,83 @@ void pos_pid_sync_set_target(float target_pos)
 void pos_pid_sync_set_max_vel(float max_vel)
 {
     pos_pid_sync.max_output_vel = pos_pid_sync_clampf(max_vel, 0.0f, POS_PID_SYNC_VEL_OUT_MAX);
+}
+
+/**
+***********************************************************************
+* @brief:      pos_pid_sync_target_state_machine(void)
+* @retval:     void
+* @details:    目标点状态机：1000 -> 0 -> -1000 -> 0，只执行一轮。
+*              每次到达目标后保持 2s，最后停在 0 不再切换。
+***********************************************************************
+**/
+void pos_pid_sync_target_state_machine(void)
+{
+    static uint8_t target_index = 0U;//当前走到目标数组的第几个点
+    static uint8_t is_inited = 0U;//是否完成首次初始化
+    static uint8_t wait_dwell = 0U;//是否进入到点后的停留阶段
+    static uint8_t is_finished = 0U;//是否整轮执行结束
+    static uint32_t dwell_tick = 0U;//进入停留阶段的时间戳
+    uint32_t now_tick;
+    float motor1_pos;
+    float motor2_pos;
+    float avg_pos;
+    float target_pos;
+
+    if (pos_pid_sync.hcan == NULL)
+    {
+        return;
+    }
+
+    now_tick = HAL_GetTick();
+
+    if (is_inited == 0U)
+    {
+        target_index = 0U;
+        wait_dwell = 0U;
+        is_finished = 0U;
+        dwell_tick = now_tick;
+        is_inited = 1U;
+        pos_pid_sync_set_target(pos_pid_sync_sm_targets[target_index]);
+        return;
+    }
+
+    if (is_finished != 0U)
+    {
+        return;
+    }
+
+    target_pos = pos_pid_sync_sm_targets[target_index];
+
+    if (wait_dwell != 0U)
+    {
+        if ((now_tick - dwell_tick) >= POS_PID_SYNC_SM_DWELL_MS)
+        {
+            uint8_t last_index = (uint8_t)((sizeof(pos_pid_sync_sm_targets) / sizeof(pos_pid_sync_sm_targets[0])) - 1U);
+            if (target_index < last_index)
+            {
+                target_index++;
+                pos_pid_sync_set_target(pos_pid_sync_sm_targets[target_index]);
+                wait_dwell = 0U;
+            }
+            else
+            {
+                is_finished = 1U;
+            }
+        }
+        return;
+    }
+
+    motor_angle_update();
+    motor1_pos = POS_PID_SYNC_MOTOR1_DIR * motor_angle_get(pos_pid_sync.motor1_index);
+    motor2_pos = POS_PID_SYNC_MOTOR2_DIR * motor_angle_get(pos_pid_sync.motor2_index);
+    avg_pos = 0.5f * (motor1_pos + motor2_pos);
+
+    if (pos_pid_sync_absf(target_pos - avg_pos) <= POS_PID_SYNC_SM_REACH_TOL)
+    {
+        dwell_tick = now_tick;
+        wait_dwell = 1U;
+    }
 }
 
 /**

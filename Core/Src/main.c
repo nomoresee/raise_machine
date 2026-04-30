@@ -57,10 +57,9 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-static float pos_target = 600.0f;
-static float pos_vel = 0.2f;
-static uint32_t servo2_toggle_tick = 0U;
-static uint8_t servo2_toggle_state = 0U;
+static float pos_target = 200.0f;
+static float pos_vel = 0.7f;
+//static uint32_t vofa_print_tick = 0U;
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
@@ -136,7 +135,7 @@ int main(void)
 
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
-  servo2_toggle_tick = HAL_GetTick();
+
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, GPIO_PIN_SET);
   /* USER CODE END 2 */
 
@@ -144,7 +143,22 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+  //  pos_ctrl(&hfdcan1, motor[Motor1].id, pos_target, pos_vel);
+  //  pos_ctrl(&hfdcan1, motor[Motor2].id, pos_target, pos_vel);
+
+  //  if ((HAL_GetTick() - vofa_print_tick) >= 100U)
+  //  {
+  //   vofa_print_tick = HAL_GetTick();
+  //   printf("%.6f,%.6f,%.6f,%.6f,%.6f,%.6f\r\n",
+  //          motor[Motor1].para.pos,                       // VOFA 通道 1：电机 1 原始位置反馈。
+  //          motor[Motor2].para.pos,                       // VOFA 通道 2：电机 2 原始位置反馈。
+  //          motor[Motor1].para.pos - motor[Motor2].para.pos, // VOFA 通道 3：两台电机原始位置误差。
+  //          motor[Motor1].para.vel,                       // VOFA 通道 4：电机 1 原始速度反馈。
+  //          motor[Motor2].para.vel,                       // VOFA 通道 5：电机 2 原始速度反馈。
+  //          motor[Motor1].para.vel - motor[Motor2].para.vel); // VOFA 通道 6：两台电机原始速度误差。
+  //  }
    
+    pos_pid_sync_target_state_machine();
     pos_pid_sync_process();
 
     

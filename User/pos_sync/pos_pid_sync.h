@@ -38,6 +38,15 @@ void pos_pid_sync_set_max_vel(float max_vel);
 
 /**
 ***********************************************************************
+* @brief:      pos_pid_sync_target_state_machine(void)
+* @retval:     void
+* @details:    目标点状态机：1000 -> 0 -> -1000 -> 0，只跑一轮，每段停 2s。
+***********************************************************************
+**/
+void pos_pid_sync_target_state_machine(void);
+
+/**
+***********************************************************************
 * @brief:      pos_pid_sync_process(void)
 * @retval:     void
 * @details:    主循环中持续调用，按内部周期计算同步修正并调用 pos_ctrl 下发控制量。
