@@ -12,6 +12,8 @@
 #include "dm_motor_ctrl.h"
 #include "motor_angle/motor_angle.h"
 #include "pos_sync/pos_pid_sync.h"
+#include "beam_ctrl/beam_ctrl.h"
+#include "crane_route/crane_route.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"

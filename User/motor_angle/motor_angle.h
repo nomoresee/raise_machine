@@ -3,6 +3,11 @@
 
 #include "dm_motor_drv.h"
 
+#define MOTOR_ANGLE_MAX_TRACKED  8U
+
+void motor_angle_module_init(void);
+uint8_t motor_angle_register(motor_num motor_index);
+
 /**
 ***********************************************************************
 * @brief:      motor_angle_init(motor_num motor1_index, motor_num motor2_index)
@@ -22,6 +27,7 @@ void motor_angle_init(motor_num motor1_index, motor_num motor2_index);
 ***********************************************************************
 **/
 void motor_angle_reset(void);
+void motor_angle_reset_one(motor_num motor_index);
 
 /**
 ***********************************************************************
@@ -31,6 +37,7 @@ void motor_angle_reset(void);
 ***********************************************************************
 **/
 void motor_angle_update(void);
+void motor_angle_update_all(void);
 
 /**
 ***********************************************************************

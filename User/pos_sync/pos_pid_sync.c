@@ -6,6 +6,7 @@
 
 #define POS_PID_SYNC_MOTOR1_DIR      1.0f
 #define POS_PID_SYNC_MOTOR2_DIR     -1.0f
+#define POS_PID_SYNC_MOTOR3_DIR      1.0f /* 与 beam_ctrl 中 BEAM_CTRL_DIR 保持一致 */
 
 #define POS_PID_SYNC_POS_KP          0.20f//整体位置外环，判断两台电机平均位置离目标还有多远
 #define POS_PID_SYNC_POS_KI          0.0f
@@ -28,6 +29,8 @@
 
 #define POS_PID_SYNC_SM_DWELL_MS     2000U
 #define POS_PID_SYNC_SM_REACH_TOL    5.0f
+#define POS_PID_SYNC_REACH_TOL       5.0f
+#define POS_PID_SYNC_REACH_HOLD_MS   80U
 
 typedef struct
 {
@@ -36,15 +39,21 @@ typedef struct
     motor_num motor2_index;
     uint32_t ctrl_tick;
     uint32_t print_tick;
+    uint32_t reach_tick;
     float target_pos;
     float max_output_vel;
+    float current_pos;
+    float reach_tol;
+    uint8_t enabled;
+    uint8_t busy;
+    uint8_t arrived;
     pid_para_t pos_pid;
     pid_para_t balance_pid;
     pid_para_t vel_pid;
 } pos_pid_sync_t;
 
 static pos_pid_sync_t pos_pid_sync;
-static const float pos_pid_sync_sm_targets[] = {1000.0f, 0.0f, -2000.0f, 0.0f};
+static const float pos_pid_sync_sm_targets[] = {200.0f, 0.0f, -200.0f, 0.0f};
 
 /**
 ***********************************************************************
@@ -65,7 +74,7 @@ static float pos_pid_sync_absf(float value)
 * @param:      value：待限幅的输入值
 * @param:      min_value：输出下限
 * @param:      max_value：输出上限
-* @retval:     float
+ * @retval:     float
 * @details:    将输入值限制在指定范围内，避免位置修正量和速度指令超限。
 ***********************************************************************
 **/
@@ -134,31 +143,30 @@ static void pos_pid_sync_send(motor_t *motor_ptr, float pos, float output_vel)
 
 /**
 ***********************************************************************
-* @brief:      pos_pid_sync_vofa_print(float motor1_pos, float motor2_pos, float pos_error, float motor1_vel, float motor2_vel, float vel_error)
-* @param:      motor1_pos：电机1反馈位置
-* @param:      motor2_pos：电机2反馈位置
-* @param:      pos_error：两台电机位置误差，计算方式为电机1位置减电机2位置
-* @param:      motor1_vel：电机1反馈速度
-* @param:      motor2_vel：电机2反馈速度
-* @param:      vel_error：两台电机速度误差，计算方式为电机1速度减电机2速度
-* @retval:     void
-* @details:    使用 VOFA+ FireWater 格式输出数据。各通道使用英文逗号分隔，帧尾使用 \r\n。
+* @brief:      pos_pid_sync_vofa_print(...)
+* @details:    VOFA+ FireWater：1/2 位置，1-2 位置误差，3 号位置，1/2/3 速度。
 ***********************************************************************
 **/
 static void pos_pid_sync_vofa_print(float motor1_pos,
                                     float motor2_pos,
                                     float pos_error,
+                                    float target_x,
+                                    float target_y,
+                                    float motor3_pos,
                                     float motor1_vel,
                                     float motor2_vel,
-                                    float vel_error)
+                                    float motor3_vel)
 {
-    printf("%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\r\n",
+    printf("%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\r\n",
+           target_x,
+           target_y,
            motor1_pos,
            motor2_pos,
            pos_error,
+           motor3_pos,
            motor1_vel,
            motor2_vel,
-           vel_error);
+           motor3_vel);
 }
 
 /**
@@ -179,6 +187,8 @@ void pos_pid_sync_init(hcan_t *hcan, motor_num motor1_index, motor_num motor2_in
     pos_pid_sync.motor1_index = motor1_index;
     pos_pid_sync.motor2_index = motor2_index;
     pos_pid_sync.max_output_vel = POS_PID_SYNC_VEL_OUT_MAX;
+    pos_pid_sync.reach_tol = POS_PID_SYNC_REACH_TOL;
+    pos_pid_sync.arrived = 1U;
 
     pos_pid_sync_pid_init(&pos_pid_sync.pos_pid,
                           POS_PID_SYNC_POS_KP,
@@ -203,9 +213,11 @@ void pos_pid_sync_init(hcan_t *hcan, motor_num motor1_index, motor_num motor2_in
 
     motor[motor1_index].ctrl.mode = pos_mode;
     motor[motor2_index].ctrl.mode = pos_mode;
-    motor_angle_init(motor1_index, motor2_index);
+    (void)motor_angle_register(motor1_index);
+    (void)motor_angle_register(motor2_index);
     pos_pid_sync.ctrl_tick = HAL_GetTick();
     pos_pid_sync.print_tick = HAL_GetTick();
+    pos_pid_sync.reach_tick = HAL_GetTick();
 }
 
 /**
@@ -219,6 +231,72 @@ void pos_pid_sync_init(hcan_t *hcan, motor_num motor1_index, motor_num motor2_in
 void pos_pid_sync_set_target(float target_pos)
 {
     pos_pid_sync.target_pos = target_pos;
+    pos_pid_sync.busy = 1U;
+    pos_pid_sync.arrived = 0U;
+    pos_pid_sync.reach_tick = HAL_GetTick();
+    pid_clear(&pos_pid_sync.pos_pid);
+    pid_clear(&pos_pid_sync.vel_pid);
+}
+
+void pos_pid_sync_start(void)
+{
+    pos_pid_sync.enabled = 1U;
+    pos_pid_sync.busy = 1U;
+    pos_pid_sync.arrived = 0U;
+    pos_pid_sync.reach_tick = HAL_GetTick();
+}
+
+void pos_pid_sync_stop(void)
+{
+    pos_pid_sync.enabled = 0U;
+    pos_pid_sync.busy = 0U;
+    pos_pid_sync.arrived = 1U;
+}
+
+uint8_t pos_pid_sync_is_busy(void)
+{
+    uint32_t now_tick;
+    float pos_error;
+
+    if ((pos_pid_sync.enabled == 0U) || (pos_pid_sync.hcan == NULL))
+    {
+        return 0U;
+    }
+
+    now_tick = HAL_GetTick();
+    pos_pid_sync.current_pos = pos_pid_sync_get_current_pos();
+    pos_error = pos_pid_sync_absf(pos_pid_sync.target_pos - pos_pid_sync.current_pos);
+
+    if (pos_error <= pos_pid_sync.reach_tol)
+    {
+        if ((now_tick - pos_pid_sync.reach_tick) >= POS_PID_SYNC_REACH_HOLD_MS)
+        {
+            pos_pid_sync.busy = 0U;
+            pos_pid_sync.arrived = 1U;
+        }
+    }
+    else
+    {
+        pos_pid_sync.busy = 1U;
+        pos_pid_sync.arrived = 0U;
+        pos_pid_sync.reach_tick = now_tick;
+    }
+
+    return pos_pid_sync.busy;
+}
+
+uint8_t pos_pid_sync_is_arrived(void)
+{
+    return pos_pid_sync.arrived;
+}
+
+float pos_pid_sync_get_current_pos(void)
+{
+    float motor1_pos = POS_PID_SYNC_MOTOR1_DIR * motor_angle_get(pos_pid_sync.motor1_index);
+    float motor2_pos = POS_PID_SYNC_MOTOR2_DIR * motor_angle_get(pos_pid_sync.motor2_index);
+
+    pos_pid_sync.current_pos = 0.5f * (motor1_pos + motor2_pos);
+    return pos_pid_sync.current_pos;
 }
 
 /**
@@ -321,13 +399,23 @@ void pos_pid_sync_target_state_machine(void)
 **/
 void pos_pid_sync_process(void)
 {
+    if (pos_pid_sync.enabled == 0U)
+    {
+        return;
+    }
+
     motor_t *motor1;        // 电机 1 的控制结构体指针，用于读取反馈并下发控制量。
     motor_t *motor2;        // 电机 2 的控制结构体指针，用于读取反馈并下发控制量。
+    motor_t *motor3;        // 电机 3：VOFA 调试输出用。
     uint32_t now_tick;      // 当前系统毫秒计时，用来控制 PID 计算周期和打印周期。
     float motor1_pos;       // 电机 1 按同步方向修正后的实际位置反馈。
     float motor2_pos;       // 电机 2 按同步方向修正后的实际位置反馈。
     float motor1_vel;       // 电机 1 按同步方向修正后的实际速度反馈。
     float motor2_vel;       // 电机 2 按同步方向修正后的实际速度反馈。
+    float motor3_pos;     // 电机 3 位置（与 beam 方向一致）。
+    float motor3_vel;     // 电机 3 速度（与 beam 方向一致）。
+    float target_x;
+    float target_y;
     float avg_pos;          // 两台电机的平均位置，代表双电机系统的整体当前位置。
     float avg_vel;          // 两台电机速度绝对值的平均值，代表当前整体运动速度。
     float pos_offset;       // 位置外环输出，用平均位置误差计算整体位置补偿量。
@@ -350,12 +438,16 @@ void pos_pid_sync_process(void)
 
     motor1 = &motor[pos_pid_sync.motor1_index]; // 根据初始化时保存的索引找到电机 1。
     motor2 = &motor[pos_pid_sync.motor2_index]; // 根据初始化时保存的索引找到电机 2。
-    motor_angle_update(); // 更新两台电机的多圈位置，保证后续位置反馈是最新值。
+    motor3 = &motor[Motor3];
+    crane_route_get_current_target(&target_x, &target_y);
+    motor_angle_update(); // 更新已登记电机的多圈位置。
 
     motor1_pos = POS_PID_SYNC_MOTOR1_DIR * motor_angle_get(pos_pid_sync.motor1_index); // 读取电机 1 位置，并用方向系数统一正方向。
     motor2_pos = POS_PID_SYNC_MOTOR2_DIR * motor_angle_get(pos_pid_sync.motor2_index); // 读取电机 2 位置，并用方向系数统一正方向。
     motor1_vel = POS_PID_SYNC_MOTOR1_DIR * motor1->para.vel; // 读取电机 1 速度，并用方向系数统一正方向。
     motor2_vel = POS_PID_SYNC_MOTOR2_DIR * motor2->para.vel; // 读取电机 2 速度，并用方向系数统一正方向。
+    motor3_pos = POS_PID_SYNC_MOTOR3_DIR * motor_angle_get(Motor3);
+    motor3_vel = POS_PID_SYNC_MOTOR3_DIR * motor3->para.vel;
     avg_pos = 0.5f * (motor1_pos + motor2_pos); // 计算平均位置，用于判断整体距离目标位置还有多远。
     avg_vel = 0.5f * (pos_pid_sync_absf(motor1_vel) + pos_pid_sync_absf(motor2_vel)); // 计算平均速度幅值，用于速度环反馈。
 
@@ -373,11 +465,14 @@ void pos_pid_sync_process(void)
     if ((now_tick - pos_pid_sync.print_tick) >= POS_PID_SYNC_PRINT_MS) // 到达打印周期后输出调试数据。
     {
         pos_pid_sync.print_tick = now_tick; // 更新时间戳，控制下一次 VOFA 打印间隔。
-        pos_pid_sync_vofa_print(motor1_pos,              // VOFA 通道 1：电机 1 统一方向后的位置反馈。
-                                motor2_pos,              // VOFA 通道 2：电机 2 统一方向后的位置反馈。
-                                motor1_pos - motor2_pos, // VOFA 通道 3：两台电机的位置同步误差。
-                                motor1_vel,              // VOFA 通道 4：电机 1 统一方向后的速度反馈。
-                                motor2_vel,              // VOFA 通道 5：电机 2 统一方向后的速度反馈。
-                                motor1_vel - motor2_vel); // VOFA 通道 6：两台电机的速度误差。
+        pos_pid_sync_vofa_print(motor1_pos,
+                                motor2_pos,
+                                motor1_pos - motor2_pos,
+                                target_x,
+                                target_y,
+                                motor3_pos,
+                                motor1_vel,
+                                motor2_vel,
+                                motor3_vel);
     }
 }

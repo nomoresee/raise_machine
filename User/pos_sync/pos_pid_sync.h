@@ -25,6 +25,11 @@ void pos_pid_sync_init(hcan_t *hcan, motor_num motor1_index, motor_num motor2_in
 ***********************************************************************
 **/
 void pos_pid_sync_set_target(float target_pos);
+void pos_pid_sync_start(void);
+void pos_pid_sync_stop(void);
+uint8_t pos_pid_sync_is_busy(void);
+uint8_t pos_pid_sync_is_arrived(void);
+float pos_pid_sync_get_current_pos(void);
 
 /**
 ***********************************************************************

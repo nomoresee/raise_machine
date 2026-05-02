@@ -5,12 +5,13 @@
 typedef struct
 {
     motor_num motor_index;
+    uint8_t used;
     uint8_t initialized;
     float last_raw_pos;
     float actual_pos;
 } motor_angle_state_t;
 
-static motor_angle_state_t motor_angle_state[2];
+static motor_angle_state_t motor_angle_state[MOTOR_ANGLE_MAX_TRACKED];
 
 /**
 ***********************************************************************
@@ -60,7 +61,7 @@ static void motor_angle_update_one(motor_angle_state_t *state)
     float raw_pos;
     float delta;
 
-    if (state == NULL)
+    if ((state == NULL) || (state->used == 0U))
     {
         return;
     }
@@ -103,12 +104,44 @@ static void motor_angle_update_one(motor_angle_state_t *state)
 * @details:    初始化两台电机的多圈实际输出轴角度计算模块。
 ***********************************************************************
 **/
-void motor_angle_init(motor_num motor1_index, motor_num motor2_index)
+void motor_angle_module_init(void)
 {
     memset(motor_angle_state, 0, sizeof(motor_angle_state));
+}
 
-    motor_angle_state[0].motor_index = motor1_index;
-    motor_angle_state[1].motor_index = motor2_index;
+uint8_t motor_angle_register(motor_num motor_index)
+{
+    uint8_t i;
+
+    for (i = 0U; i < MOTOR_ANGLE_MAX_TRACKED; i++)
+    {
+        if ((motor_angle_state[i].used != 0U) &&
+            (motor_angle_state[i].motor_index == motor_index))
+        {
+            return 1U;
+        }
+    }
+
+    for (i = 0U; i < MOTOR_ANGLE_MAX_TRACKED; i++)
+    {
+        if (motor_angle_state[i].used == 0U)
+        {
+            memset(&motor_angle_state[i], 0, sizeof(motor_angle_state[i]));
+            motor_angle_state[i].used = 1U;
+            motor_angle_state[i].motor_index = motor_index;
+            return 1U;
+        }
+    }
+
+    return 0U;
+}
+
+void motor_angle_init(motor_num motor1_index, motor_num motor2_index)
+{
+    motor_angle_module_init();
+
+    (void)motor_angle_register(motor1_index);
+    (void)motor_angle_register(motor2_index);
 }
 
 /**
@@ -120,13 +153,31 @@ void motor_angle_init(motor_num motor1_index, motor_num motor2_index)
 **/
 void motor_angle_reset(void)
 {
-    motor_angle_state[0].initialized = 0U;
-    motor_angle_state[0].last_raw_pos = 0.0f;
-    motor_angle_state[0].actual_pos = 0.0f;
+    uint8_t i;
 
-    motor_angle_state[1].initialized = 0U;
-    motor_angle_state[1].last_raw_pos = 0.0f;
-    motor_angle_state[1].actual_pos = 0.0f;
+    for (i = 0U; i < MOTOR_ANGLE_MAX_TRACKED; i++)
+    {
+        motor_angle_state[i].initialized = 0U;
+        motor_angle_state[i].last_raw_pos = 0.0f;
+        motor_angle_state[i].actual_pos = 0.0f;
+    }
+}
+
+void motor_angle_reset_one(motor_num motor_index)
+{
+    uint8_t i;
+
+    for (i = 0U; i < MOTOR_ANGLE_MAX_TRACKED; i++)
+    {
+        if ((motor_angle_state[i].used != 0U) &&
+            (motor_angle_state[i].motor_index == motor_index))
+        {
+            motor_angle_state[i].initialized = 0U;
+            motor_angle_state[i].last_raw_pos = 0.0f;
+            motor_angle_state[i].actual_pos = 0.0f;
+            return;
+        }
+    }
 }
 
 /**
@@ -138,8 +189,17 @@ void motor_angle_reset(void)
 **/
 void motor_angle_update(void)
 {
-    motor_angle_update_one(&motor_angle_state[0]);
-    motor_angle_update_one(&motor_angle_state[1]);
+    motor_angle_update_all();
+}
+
+void motor_angle_update_all(void)
+{
+    uint8_t i;
+
+    for (i = 0U; i < MOTOR_ANGLE_MAX_TRACKED; i++)
+    {
+        motor_angle_update_one(&motor_angle_state[i]);
+    }
 }
 
 /**
@@ -152,14 +212,15 @@ void motor_angle_update(void)
 **/
 float motor_angle_get(motor_num motor_index)
 {
-    if (motor_angle_state[0].motor_index == motor_index)
-    {
-        return motor_angle_state[0].actual_pos;
-    }
+    uint8_t i;
 
-    if (motor_angle_state[1].motor_index == motor_index)
+    for (i = 0U; i < MOTOR_ANGLE_MAX_TRACKED; i++)
     {
-        return motor_angle_state[1].actual_pos;
+        if ((motor_angle_state[i].used != 0U) &&
+            (motor_angle_state[i].motor_index == motor_index))
+        {
+            return motor_angle_state[i].actual_pos;
+        }
     }
 
     return motor[motor_index].para.pos;
