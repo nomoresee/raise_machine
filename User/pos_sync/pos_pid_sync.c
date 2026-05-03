@@ -14,13 +14,13 @@
 #define POS_PID_SYNC_POS_OUT_MAX     5.0f
 #define POS_PID_SYNC_POS_OUT_MIN    -5.0f
 
-#define POS_PID_SYNC_BAL_KP          0.2f//同步修正环，判断 Motor1 和 Motor2 之间差多少
+#define POS_PID_SYNC_BAL_KP          0.20f//同步修正环，判断 Motor1 和 Motor2 之间差多少
 #define POS_PID_SYNC_BAL_KI          0.0f
 #define POS_PID_SYNC_BAL_KD          0.0f
 #define POS_PID_SYNC_BAL_OUT_MAX     2.0f
 #define POS_PID_SYNC_BAL_OUT_MIN    -2.0f
 
-#define POS_PID_SYNC_VEL_KP          0.50f//速度给定环，根据位置误差和当前速度算下发速度
+#define POS_PID_SYNC_VEL_KP          0.20f//速度给定环，根据位置误差和当前速度算下发速度
 #define POS_PID_SYNC_VEL_KI          0.0f
 #define POS_PID_SYNC_VEL_KD          0.0f
 #define POS_PID_SYNC_VEL_OUT_MAX     20.0f
