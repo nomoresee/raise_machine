@@ -59,7 +59,7 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN 0 */
 static float pos_target = 200.0f;
 static float pos_vel = 3.7f;
-static float beam_vel = 30.0f;
+static float beam_vel = 1.0f;
 //static uint32_t vofa_print_tick = 0U;
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
@@ -84,7 +84,7 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-     HAL_Init();
+                HAL_Init();
 
   /* USER CODE END Init */
 

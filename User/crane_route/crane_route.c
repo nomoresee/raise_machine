@@ -6,14 +6,14 @@
 static crane_slot_pose_t crane_route_slot_pose[CRANE_ROUTE_SLOT_COUNT + 1U] =
 {
     {0.0f, 0.0f}, /* unused slot 0 */
-    {300.0f, 1500.0f}, /* slot 1 */
+    {300.0f, 150.0f}, /* slot 1 */
     {300.0f, 0.0f}, /* slot 2 */
-    {300.0f, -1500.0f}, /* slot 3 */
-    {-400.0f, 1500.0f}, /* slot 4 */ 
-    {-400.0f, 1200.0f}, /* slot 5 */
-    {-400.0f, 500.0f}, /* slot 6 */
-    {-400.0f, -500.0f}, /* slot 7 */
-    {-400.0f,-1300.0f}, /* slot 8 */
+    {300.0f, -150.0f}, /* slot 3 */
+    {-400.0f, 150.0f}, /* slot 4 */ 
+    {-400.0f, 120.0f}, /* slot 5 */
+    {-400.0f, 50.0f}, /* slot 6 */
+    {-400.0f, -50.0f}, /* slot 7 */
+    {-400.0f,-130.0f}, /* slot 8 */
 };
 
 static const uint8_t crane_route_steps[CRANE_ROUTE_STEP_COUNT] =

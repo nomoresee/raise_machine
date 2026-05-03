@@ -7,6 +7,7 @@ typedef struct
     motor_num motor_index;
     uint8_t used;
     uint8_t initialized;
+    float pos_ratio;
     float last_raw_pos;
     float actual_pos;
 } motor_angle_state_t;
@@ -24,6 +25,22 @@ static motor_angle_state_t motor_angle_state[MOTOR_ANGLE_MAX_TRACKED];
 static float motor_angle_absf(float value)
 {
     return (value >= 0.0f) ? value : -value;
+}
+
+static motor_angle_state_t *motor_angle_find_state(motor_num motor_index)
+{
+    uint8_t i;
+
+    for (i = 0U; i < MOTOR_ANGLE_MAX_TRACKED; i++)
+    {
+        if ((motor_angle_state[i].used != 0U) &&
+            (motor_angle_state[i].motor_index == motor_index))
+        {
+            return &motor_angle_state[i];
+        }
+    }
+
+    return NULL;
 }
 
 /**
@@ -76,7 +93,7 @@ static void motor_angle_update_one(motor_angle_state_t *state)
     {
         state->initialized = 1U;
         state->last_raw_pos = raw_pos;
-        state->actual_pos = raw_pos;
+        state->actual_pos = raw_pos * state->pos_ratio;
         return;
     }
 
@@ -91,7 +108,7 @@ static void motor_angle_update_one(motor_angle_state_t *state)
         delta += full_range;
     }
 
-    state->actual_pos += delta;
+    state->actual_pos += delta * state->pos_ratio;
     state->last_raw_pos = raw_pos;
 }
 
@@ -111,15 +128,13 @@ void motor_angle_module_init(void)
 
 uint8_t motor_angle_register(motor_num motor_index)
 {
+    motor_angle_state_t *state;
     uint8_t i;
 
-    for (i = 0U; i < MOTOR_ANGLE_MAX_TRACKED; i++)
+    state = motor_angle_find_state(motor_index);
+    if (state != NULL)
     {
-        if ((motor_angle_state[i].used != 0U) &&
-            (motor_angle_state[i].motor_index == motor_index))
-        {
-            return 1U;
-        }
+        return 1U;
     }
 
     for (i = 0U; i < MOTOR_ANGLE_MAX_TRACKED; i++)
@@ -129,11 +144,39 @@ uint8_t motor_angle_register(motor_num motor_index)
             memset(&motor_angle_state[i], 0, sizeof(motor_angle_state[i]));
             motor_angle_state[i].used = 1U;
             motor_angle_state[i].motor_index = motor_index;
+            motor_angle_state[i].pos_ratio = 1.0f;
             return 1U;
         }
     }
 
     return 0U;
+}
+
+uint8_t motor_angle_set_pos_ratio(motor_num motor_index, float pos_ratio)
+{
+    motor_angle_state_t *state;
+
+    if (motor_angle_absf(pos_ratio) <= 0.001f)
+    {
+        return 0U;
+    }
+
+    if (motor_angle_register(motor_index) == 0U)
+    {
+        return 0U;
+    }
+
+    state = motor_angle_find_state(motor_index);
+    if (state == NULL)
+    {
+        return 0U;
+    }
+
+    state->pos_ratio = pos_ratio;
+    state->initialized = 0U;
+    state->last_raw_pos = 0.0f;
+    state->actual_pos = 0.0f;
+    return 1U;
 }
 
 void motor_angle_init(motor_num motor1_index, motor_num motor2_index)
@@ -212,16 +255,26 @@ void motor_angle_update_all(void)
 **/
 float motor_angle_get(motor_num motor_index)
 {
-    uint8_t i;
+    motor_angle_state_t *state;
 
-    for (i = 0U; i < MOTOR_ANGLE_MAX_TRACKED; i++)
+    state = motor_angle_find_state(motor_index);
+    if (state != NULL)
     {
-        if ((motor_angle_state[i].used != 0U) &&
-            (motor_angle_state[i].motor_index == motor_index))
-        {
-            return motor_angle_state[i].actual_pos;
-        }
+        return state->actual_pos;
     }
 
     return motor[motor_index].para.pos;
+}
+
+float motor_angle_to_raw_pos(motor_num motor_index, float actual_pos)
+{
+    motor_angle_state_t *state;
+
+    state = motor_angle_find_state(motor_index);
+    if ((state != NULL) && (motor_angle_absf(state->pos_ratio) > 0.001f))
+    {
+        return actual_pos / state->pos_ratio;
+    }
+
+    return actual_pos;
 }

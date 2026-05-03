@@ -7,6 +7,7 @@
 
 void motor_angle_module_init(void);
 uint8_t motor_angle_register(motor_num motor_index);
+uint8_t motor_angle_set_pos_ratio(motor_num motor_index, float pos_ratio);
 
 /**
 ***********************************************************************
@@ -48,5 +49,6 @@ void motor_angle_update_all(void);
 ***********************************************************************
 **/
 float motor_angle_get(motor_num motor_index);
+float motor_angle_to_raw_pos(motor_num motor_index, float actual_pos);
 
 #endif
