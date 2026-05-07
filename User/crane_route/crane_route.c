@@ -18,7 +18,7 @@ static crane_slot_pose_t crane_route_slot_pose[CRANE_ROUTE_SLOT_COUNT + 1U] =
 
 static const uint8_t crane_route_steps[CRANE_ROUTE_STEP_COUNT] =
 {
-    1U, 4U, 5U,3U, 2U, 7U
+    1U, 4U, 3U,5U, 2U, 7U
 };
 
 typedef struct
