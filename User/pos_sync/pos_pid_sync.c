@@ -50,6 +50,8 @@ typedef struct
     pid_para_t pos_pid;
     pid_para_t balance_pid;
     pid_para_t vel_pid;
+
+    pos_pid_sync_vofa_snapshot_t vofa_snapshot;
 } pos_pid_sync_t;
 
 static pos_pid_sync_t pos_pid_sync;
@@ -157,6 +159,18 @@ static void pos_pid_sync_vofa_print(float motor1_pos,
                                     float motor2_vel,
                                     float motor3_vel)
 {
+    /* 缓存给 LCD 使用：与 VOFA 输出同源 */
+    pos_pid_sync.vofa_snapshot.target_x = target_x;
+    pos_pid_sync.vofa_snapshot.target_y = target_y;
+    pos_pid_sync.vofa_snapshot.motor1_pos = motor1_pos;
+    pos_pid_sync.vofa_snapshot.motor2_pos = motor2_pos;
+    pos_pid_sync.vofa_snapshot.pos_error = pos_error;
+    pos_pid_sync.vofa_snapshot.motor3_pos = motor3_pos;
+    pos_pid_sync.vofa_snapshot.motor1_vel = motor1_vel;
+    pos_pid_sync.vofa_snapshot.motor2_vel = motor2_vel;
+    pos_pid_sync.vofa_snapshot.motor3_vel = motor3_vel;
+    pos_pid_sync.vofa_snapshot.valid = 1U;
+
     printf("%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\r\n",
            target_x,
            target_y,
@@ -167,6 +181,22 @@ static void pos_pid_sync_vofa_print(float motor1_pos,
            motor1_vel,
            motor2_vel,
            motor3_vel);
+}
+
+uint8_t pos_pid_sync_get_vofa_snapshot(pos_pid_sync_vofa_snapshot_t *out)
+{
+    if (out == NULL)
+    {
+        return 0U;
+    }
+
+    if (pos_pid_sync.vofa_snapshot.valid == 0U)
+    {
+        return 0U;
+    }
+
+    *out = pos_pid_sync.vofa_snapshot;
+    return 1U;
 }
 
 /**

@@ -59,4 +59,25 @@ void pos_pid_sync_target_state_machine(void);
 **/
 void pos_pid_sync_process(void);
 
+/* ===== VOFA/LCD 调试快照 ===== */
+typedef struct
+{
+    float target_x;
+    float target_y;
+    float motor1_pos;
+    float motor2_pos;
+    float pos_error;
+    float motor3_pos;
+    float motor1_vel;
+    float motor2_vel;
+    float motor3_vel;
+    uint8_t valid;
+} pos_pid_sync_vofa_snapshot_t;
+
+/**
+ * @brief 获取最新一次 VOFA 打印同源的数据快照，用于 LCD 实时显示
+ * @return 1: 成功 0: 当前无有效数据
+ */
+uint8_t pos_pid_sync_get_vofa_snapshot(pos_pid_sync_vofa_snapshot_t *out);
+
 #endif

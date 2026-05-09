@@ -115,7 +115,7 @@ static float servo_step_towards(float current_angle, float target_angle, float s
 * @brief:      	servo_clamp_angle(float angle_deg)
 * @param:      	angle_deg：输入的舵机1角度，单位为度
 * @retval:     	float
-* @details:    	将舵机1角度限制在 0~270 度范围内
+* @details:    	将舵机1角度限制在 0~180 度范围内
 ************************************************************************
 **/
 float servo_clamp_angle(float angle_deg)
@@ -154,7 +154,7 @@ uint32_t servo_compare_to_pulse_us(uint32_t compare)
 * @brief:      	servo_angle_to_compare(float angle_deg)
 * @param:      	angle_deg：输入的舵机1角度，单位为度
 * @retval:     	uint32_t
-* @details:    	将舵机1的 0~270 度角度映射为比较值
+* @details:    	将舵机1的 0~180 度角度映射为比较值
 ************************************************************************
 **/
 uint32_t servo_angle_to_compare(float angle_deg)
@@ -167,7 +167,7 @@ uint32_t servo_angle_to_compare(float angle_deg)
 * @brief:      	servo_compare_to_angle(uint32_t compare)
 * @param:      	compare：定时器比较值
 * @retval:     	float
-* @details:    	将比较值反算为舵机1的 0~270 度角度
+* @details:    	将比较值反算为舵机1的 0~180 度角度
 ************************************************************************
 **/
 float servo_compare_to_angle(uint32_t compare)
@@ -240,7 +240,7 @@ void servo_set_angle(TIM_HandleTypeDef *htim, uint32_t channel, float angle_deg)
 * @brief:      	servo1_set_angle(float angle_deg)
 * @param:      	angle_deg：输入的舵机1角度，单位为度
 * @retval:     	void
-* @details:    	控制舵机1转到目标角度，内部固定使用 TIM2 的 CH1 通道，范围为 0~270 度
+* @details:    	控制舵机1转到目标角度，内部固定使用 TIM2 的 CH1 通道，范围为 0~180 度
 ************************************************************************
 **/
 void servo1_set_angle(float angle_deg)

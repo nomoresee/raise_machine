@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 #define SERVO_MIN_ANGLE_DEG      0.0f
-#define SERVO1_MAX_ANGLE_DEG     270.0f
+#define SERVO1_MAX_ANGLE_DEG     180.0f
 #define SERVO2_MAX_ANGLE_DEG     180.0f
 #define SERVO_MIN_PULSE_US       500U
 #define SERVO_MID_PULSE_US       1500U

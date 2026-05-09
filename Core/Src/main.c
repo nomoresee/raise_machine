@@ -18,7 +18,10 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "adc.h"
+#include "dma.h"
 #include "fdcan.h"
+#include "spi.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
@@ -46,6 +49,8 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+static uint16_t adc_val[1];
+/* LCD 刷新由 lcd_app_update() 负责 */
 
 /* USER CODE END PV */
 
@@ -84,7 +89,9 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-                HAL_Init();
+  HAL_Init();
+
+  /* USER CODE BEGIN Init */
 
   /* USER CODE END Init */
 
@@ -97,16 +104,28 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_FDCAN1_Init();
   MX_TIM3_Init();
   MX_USART1_UART_Init();
   MX_TIM4_Init();
   MX_TIM2_Init();
   MX_TIM1_Init();
+  MX_ADC1_Init();
+  MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
   power(1);
-  HAL_Delay(1000);
+  HAL_Delay(200);
+  /* 若 PC15 接屏/背光电源使能，需在 SPI 通信前拉高，避免间歇性不亮 */
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, GPIO_PIN_SET);
+  HAL_Delay(50);
   delay_init(480);
+
+  lcd_app_init();
+
+  HAL_ADCEx_Calibration_Start(&hadc1, ADC_CALIB_OFFSET, ADC_SINGLE_ENDED);
+  HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc_val, 1);
+
   bsp_fdcan_set_baud(&hfdcan1, CAN_CLASS, CAN_BR_1M);
   bsp_can_init();
   dm_motor_init();
@@ -156,27 +175,14 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-  //  pos_ctrl(&hfdcan1, motor[Motor1].id, pos_target, pos_vel);
-  //  pos_ctrl(&hfdcan1, motor[Motor2].id, pos_target, pos_vel);
+    lcd_app_update();
 
-  //  if ((HAL_GetTick() - vofa_print_tick) >= 100U)
-  //  {
-  //   vofa_print_tick = HAL_GetTick();
-  //   printf("%.6f,%.6f,%.6f,%.6f,%.6f,%.6f\r\n",
-  //          motor[Motor1].para.pos,                       // VOFA 通道 1：电机 1 原始位置反馈。
-  //          motor[Motor2].para.pos,                       // VOFA 通道 2：电机 2 原始位置反馈。
-  //          motor[Motor1].para.pos - motor[Motor2].para.pos, // VOFA 通道 3：两台电机原始位置误差。
-  //          motor[Motor1].para.vel,                       // VOFA 通道 4：电机 1 原始速度反馈。
-  //          motor[Motor2].para.vel,                       // VOFA 通道 5：电机 2 原始速度反馈。
-  //          motor[Motor1].para.vel - motor[Motor2].para.vel); // VOFA 通道 6：两台电机原始速度误差。
-  //  }
-   
     motor_angle_update_all();
     crane_route_process();
     pos_pid_sync_process();
     beam_ctrl_process();
-
     
+     
   }
     /* USER CODE END WHILE */
 

@@ -20,7 +20,10 @@
 #include "stdbool.h"
 #include "math.h"
 #include "servo.h"
-
-
+#include "adc.h"
+#include "spi.h"
+#include "dma.h"
+#include "lcd/lcd.h"
+#include "lcd/lcd_app.h"
 
 #endif
