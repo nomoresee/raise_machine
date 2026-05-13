@@ -86,7 +86,13 @@ void MX_ADC1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN ADC1_Init 2 */
-
+  /* Cube 若仍生成 PA5/CH19，此处覆盖为内部通道，避免与 KEY 抢脚 */
+  sConfig.Channel = ADC_CHANNEL_VREFINT;
+  sConfig.SamplingTime = ADC_SAMPLETIME_64CYCLES_5;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
   /* USER CODE END ADC1_Init 2 */
 
 }
@@ -94,7 +100,6 @@ void MX_ADC1_Init(void)
 void HAL_ADC_MspInit(ADC_HandleTypeDef* adcHandle)
 {
 
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
   RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
   if(adcHandle->Instance==ADC1)
   {
@@ -122,14 +127,7 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef* adcHandle)
     /* ADC1 clock enable */
     __HAL_RCC_ADC12_CLK_ENABLE();
 
-    __HAL_RCC_GPIOA_CLK_ENABLE();
-    /**ADC1 GPIO Configuration
-    PA5     ------> ADC1_INP19
-    */
-    GPIO_InitStruct.Pin = GPIO_PIN_5;
-    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+    /* PA5 不再作 ADC 模拟口，由 gpio.c 配为 KEY 输入 */
 
     /* ADC1 DMA Init */
     /* ADC1 Init */
@@ -151,7 +149,16 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef* adcHandle)
     __HAL_LINKDMA(adcHandle,DMA_Handle,hdma_adc1);
 
   /* USER CODE BEGIN ADC1_MspInit 1 */
-
+    /* Cube 若在上方把 PA5 配成 ADC 模拟口，这里改回 KEY（上拉输入），按下为低 */
+    {
+      GPIO_InitTypeDef kio = {0};
+      __HAL_RCC_GPIOA_CLK_ENABLE();
+      kio.Pin = GPIO_PIN_5;
+      kio.Mode = GPIO_MODE_INPUT;
+      kio.Pull = GPIO_PULLUP;
+      kio.Speed = GPIO_SPEED_FREQ_LOW;
+      HAL_GPIO_Init(GPIOA, &kio);
+    }
   /* USER CODE END ADC1_MspInit 1 */
   }
 }
@@ -166,11 +173,6 @@ void HAL_ADC_MspDeInit(ADC_HandleTypeDef* adcHandle)
   /* USER CODE END ADC1_MspDeInit 0 */
     /* Peripheral clock disable */
     __HAL_RCC_ADC12_CLK_DISABLE();
-
-    /**ADC1 GPIO Configuration
-    PA5     ------> ADC1_INP19
-    */
-    HAL_GPIO_DeInit(GPIOA, GPIO_PIN_5);
 
     /* ADC1 DMA DeInit */
     HAL_DMA_DeInit(adcHandle->DMA_Handle);

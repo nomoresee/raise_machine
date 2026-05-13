@@ -44,7 +44,8 @@ void MX_SPI1_Init(void)
   hspi1.Init.CLKPolarity = SPI_POLARITY_HIGH;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
-  /* 预分频过小在杜邦线/较长走线下易误码，表现为背光亮但无显示；16 分频更稳 */
+  /* LCD 这种短帧 SPI 写入在杜邦线/走线情况下很容易误码，
+     使用更低的 SCK 频率更稳（背光正常但无显示通常就是 SPI 误码导致控制器初始化失败）。 */
   hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;

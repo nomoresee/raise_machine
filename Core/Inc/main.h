@@ -67,7 +67,9 @@ void Error_Handler(void);
 #define LCD_DC_GPIO_Port GPIOD
 
 /* USER CODE BEGIN Private defines */
-
+/* DM-MC-Board02 集成板 KEY=PA5（按下接 GND）。ADC 已改为内部 VREF 通道，PA5 专用于此按键。 */
+#define LCD_PAGE_BTN_GPIO_Port GPIOA
+#define LCD_PAGE_BTN_Pin GPIO_PIN_5
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

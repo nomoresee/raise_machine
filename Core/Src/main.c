@@ -114,6 +114,7 @@ int main(void)
   MX_TIM1_Init();
   MX_ADC1_Init();
   MX_SPI1_Init();
+  MX_UART7_Init();
   /* USER CODE BEGIN 2 */
   power(1);
   HAL_Delay(200);
@@ -179,7 +180,9 @@ int main(void)
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
 
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, GPIO_PIN_SET);
-  
+
+  pi_uart_rx_init();
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -193,16 +196,13 @@ int main(void)
     pos_pid_sync_process();
     beam_ctrl_process();
     lift_ctrl_process();
-
-   
-    
   }
-    /* USER CODE END WHILE */
+  /* USER CODE END WHILE */
 
-    /* USER CODE BEGIN 3 */
-  }
+  /* USER CODE BEGIN 3 */
+
   /* USER CODE END 3 */
-
+}
 
 /**
   * @brief System Clock Configuration

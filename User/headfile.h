@@ -26,5 +26,6 @@
 #include "dma.h"
 #include "lcd/lcd.h"
 #include "lcd/lcd_app.h"
+#include "pi_uart/pi_uart_rx.h"
 
 #endif
