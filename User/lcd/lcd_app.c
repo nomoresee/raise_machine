@@ -34,6 +34,8 @@ static void lcd_app_draw_static(void)
 void lcd_app_init(void)
 {
     LCD_Init();
+    /* 控制器上电与 Sleep Out 后稍等再刷屏，避免首帧命令边沿未稳定 */
+    HAL_Delay(30);
     lcd_app_draw_static();
     lcd_app_inited = 1U;
     lcd_app_tick = HAL_GetTick();
