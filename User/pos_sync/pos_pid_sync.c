@@ -157,7 +157,9 @@ static void pos_pid_sync_vofa_print(float motor1_pos,
                                     float motor3_pos,
                                     float motor1_vel,
                                     float motor2_vel,
-                                    float motor3_vel)
+                                    float motor3_vel,
+                                    float motor4_pos,
+                                    float motor4_vel)
 {
     /* 缓存给 LCD 使用：与 VOFA 输出同源 */
     pos_pid_sync.vofa_snapshot.target_x = target_x;
@@ -169,9 +171,11 @@ static void pos_pid_sync_vofa_print(float motor1_pos,
     pos_pid_sync.vofa_snapshot.motor1_vel = motor1_vel;
     pos_pid_sync.vofa_snapshot.motor2_vel = motor2_vel;
     pos_pid_sync.vofa_snapshot.motor3_vel = motor3_vel;
+    pos_pid_sync.vofa_snapshot.motor4_pos = motor4_pos;
+    pos_pid_sync.vofa_snapshot.motor4_vel = motor4_vel;
     pos_pid_sync.vofa_snapshot.valid = 1U;
 
-    printf("%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\r\n",
+    printf("%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\r\n",
            target_x,
            target_y,
            motor1_pos,
@@ -180,7 +184,9 @@ static void pos_pid_sync_vofa_print(float motor1_pos,
            motor3_pos,
            motor1_vel,
            motor2_vel,
-           motor3_vel);
+           motor3_vel,
+           motor4_pos,
+           motor4_vel);
 }
 
 uint8_t pos_pid_sync_get_vofa_snapshot(pos_pid_sync_vofa_snapshot_t *out)
@@ -437,6 +443,7 @@ void pos_pid_sync_process(void)
     motor_t *motor1;        // 电机 1 的控制结构体指针，用于读取反馈并下发控制量。
     motor_t *motor2;        // 电机 2 的控制结构体指针，用于读取反馈并下发控制量。
     motor_t *motor3;        // 电机 3：VOFA 调试输出用。
+    motor_t *motor4;        // 电机 4：升降轴 VOFA/LCD 输出用。
     uint32_t now_tick;      // 当前系统毫秒计时，用来控制 PID 计算周期和打印周期。
     float motor1_pos;       // 电机 1 按同步方向修正后的实际位置反馈。
     float motor2_pos;       // 电机 2 按同步方向修正后的实际位置反馈。
@@ -444,6 +451,8 @@ void pos_pid_sync_process(void)
     float motor2_vel;       // 电机 2 按同步方向修正后的实际速度反馈。
     float motor3_pos;     // 电机 3 位置（与 beam 方向一致）。
     float motor3_vel;     // 电机 3 速度（与 beam 方向一致）。
+    float motor4_pos;     // 电机 4 升降位置。
+    float motor4_vel;     // 电机 4 升降速度。
     float target_x;
     float target_y;
     float avg_pos;          // 两台电机的平均位置，代表双电机系统的整体当前位置。
@@ -469,6 +478,7 @@ void pos_pid_sync_process(void)
     motor1 = &motor[pos_pid_sync.motor1_index]; // 根据初始化时保存的索引找到电机 1。
     motor2 = &motor[pos_pid_sync.motor2_index]; // 根据初始化时保存的索引找到电机 2。
     motor3 = &motor[Motor3];
+    motor4 = &motor[Motor4];
     crane_route_get_current_target(&target_x, &target_y);
     motor_angle_update(); // 更新已登记电机的多圈位置。
 
@@ -478,6 +488,8 @@ void pos_pid_sync_process(void)
     motor2_vel = POS_PID_SYNC_MOTOR2_DIR * motor2->para.vel; // 读取电机 2 速度，并用方向系数统一正方向。
     motor3_pos = POS_PID_SYNC_MOTOR3_DIR * motor_angle_get(Motor3);
     motor3_vel = POS_PID_SYNC_MOTOR3_DIR * motor3->para.vel;
+    motor4_pos = lift_ctrl_get_current_pos();
+    motor4_vel = motor4->para.vel;
     avg_pos = 0.5f * (motor1_pos + motor2_pos); // 计算平均位置，用于判断整体距离目标位置还有多远。
     avg_vel = 0.5f * (pos_pid_sync_absf(motor1_vel) + pos_pid_sync_absf(motor2_vel)); // 计算平均速度幅值，用于速度环反馈。
 
@@ -503,6 +515,8 @@ void pos_pid_sync_process(void)
                                 motor3_pos,
                                 motor1_vel,
                                 motor2_vel,
-                                motor3_vel);
+                                motor3_vel,
+                                motor4_pos,
+                                motor4_vel);
     }
 }

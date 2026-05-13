@@ -1,19 +1,23 @@
 #include "headfile.h"
 
 #define CRANE_ROUTE_STEP_COUNT     6U
+#define CRANE_ROUTE_LIFT_PICK_1_POS      0.0f
+#define CRANE_ROUTE_LIFT_PICK_2_POS      20.0f
+#define CRANE_ROUTE_LIFT_PICK_3_POS      40.0f
+#define CRANE_ROUTE_LIFT_PLACE_POS       20.0f
 #define CRANE_ROUTE_STEP_DWELL_MS  3000U /* 每个点位到达后停留 3s，改这里可调整/关闭 */
 
 static crane_slot_pose_t crane_route_slot_pose[CRANE_ROUTE_SLOT_COUNT + 1U] =
 {
-    {0.0f, 0.0f}, /* unused slot 0 */
-    {300.0f, 150.0f}, /* slot 1 */
-    {300.0f, 0.0f}, /* slot 2 */
-    {300.0f, -150.0f}, /* slot 3 */
-    {-400.0f, 150.0f}, /* slot 4 */ 
-    {-400.0f, 120.0f}, /* slot 5 */
-    {-400.0f, 50.0f}, /* slot 6 */
-    {-400.0f, -50.0f}, /* slot 7 */
-    {-400.0f,-130.0f}, /* slot 8 */
+    {0.0f, 0.0f, 0.0f}, /* unused slot 0 */
+    {300.0f, 150.0f, CRANE_ROUTE_LIFT_PICK_1_POS}, /* slot 1 */
+    {300.0f, 0.0f, CRANE_ROUTE_LIFT_PICK_2_POS}, /* slot 2 */
+    {300.0f, -150.0f, CRANE_ROUTE_LIFT_PICK_3_POS}, /* slot 3 */
+    {-400.0f, 150.0f, CRANE_ROUTE_LIFT_PLACE_POS}, /* slot 4 */ 
+    {-400.0f, 120.0f, CRANE_ROUTE_LIFT_PLACE_POS}, /* slot 5 */
+    {-400.0f, 50.0f, CRANE_ROUTE_LIFT_PLACE_POS}, /* slot 6 */
+    {-400.0f, -50.0f, CRANE_ROUTE_LIFT_PLACE_POS}, /* slot 7 */
+    {-400.0f,-130.0f, CRANE_ROUTE_LIFT_PLACE_POS}, /* slot 8 */
 };
 
 static const uint8_t crane_route_steps[CRANE_ROUTE_STEP_COUNT] =
@@ -51,6 +55,7 @@ void crane_route_stop(void)
     crane_route.state = CRANE_ROUTE_IDLE;
     pos_pid_sync_stop();
     beam_ctrl_stop();
+    lift_ctrl_stop();
 }
 
 void crane_route_set_slot_pose(uint8_t slot, float chassis_pos, float beam_pos)
@@ -62,6 +67,16 @@ void crane_route_set_slot_pose(uint8_t slot, float chassis_pos, float beam_pos)
 
     crane_route_slot_pose[slot].chassis_pos = chassis_pos;
     crane_route_slot_pose[slot].beam_pos = beam_pos;
+}
+
+void crane_route_set_slot_lift_pos(uint8_t slot, float lift_pos)
+{
+    if ((slot == 0U) || (slot > CRANE_ROUTE_SLOT_COUNT))
+    {
+        return;
+    }
+
+    crane_route_slot_pose[slot].lift_pos = lift_pos;
 }
 
 crane_route_state_e crane_route_get_state(void)
@@ -128,13 +143,17 @@ void crane_route_process(void)
             crane_route.current_slot = slot;
             pos_pid_sync_set_target(crane_route_slot_pose[slot].chassis_pos);
             beam_ctrl_set_target(crane_route_slot_pose[slot].beam_pos);
+            lift_ctrl_set_target(crane_route_slot_pose[slot].lift_pos);
             pos_pid_sync_start();
             beam_ctrl_start();
+            lift_ctrl_start();
             crane_route.state = CRANE_ROUTE_WAIT_ARRIVE;
             break;
 
         case CRANE_ROUTE_WAIT_ARRIVE:
-            if ((pos_pid_sync_is_busy() == 0U) && (beam_ctrl_is_busy() == 0U))
+            if ((pos_pid_sync_is_busy() == 0U) &&
+                (beam_ctrl_is_busy() == 0U) &&
+                (lift_ctrl_is_busy() == 0U))
             {
                 crane_route.dwell_tick = HAL_GetTick();
                 crane_route.state = CRANE_ROUTE_STEP_DWELL;

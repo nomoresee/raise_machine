@@ -2,6 +2,8 @@
 
 static float servo1_current_angle_deg = 0.0f;
 static float servo2_current_angle_deg = 0.0f;
+static uint8_t servo1_position_valid = 0U;
+static uint8_t servo2_position_valid = 0U;
 
 /**
 ************************************************************************
@@ -246,6 +248,7 @@ void servo_set_angle(TIM_HandleTypeDef *htim, uint32_t channel, float angle_deg)
 void servo1_set_angle(float angle_deg)
 {
     servo1_current_angle_deg = servo_clamp_angle(angle_deg);
+    servo1_position_valid = 1U;
     (void)servo_write_angle(&htim2, TIM_CHANNEL_1, servo1_current_angle_deg);
 }
 
@@ -331,6 +334,7 @@ void servo1_grip_cycle(void)
 void servo2_set_angle(float angle_deg)
 {
     servo2_current_angle_deg = servo_clamp_angle_range(angle_deg, SERVO2_MAX_ANGLE_DEG);
+    servo2_position_valid = 1U;
     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, servo_angle_to_compare_range(servo2_current_angle_deg, SERVO2_MAX_ANGLE_DEG));
 }
 
@@ -382,6 +386,13 @@ void servo_sync_move_custom(float servo1_target_deg, float servo2_target_deg,
     float servo1_target = servo_clamp_angle(servo1_target_deg);
     float servo2_target = servo_clamp_angle_range(servo2_target_deg, SERVO2_MAX_ANGLE_DEG);
     uint8_t moving = 1U;
+
+    if ((servo1_position_valid == 0U) || (servo2_position_valid == 0U))
+    {
+        servo1_set_angle(servo1_target);
+        servo2_set_angle(servo2_target);
+        return;
+    }
 
     while (moving != 0U)
     {

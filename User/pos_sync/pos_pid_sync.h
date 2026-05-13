@@ -71,6 +71,8 @@ typedef struct
     float motor1_vel;
     float motor2_vel;
     float motor3_vel;
+    float motor4_pos;
+    float motor4_vel;
     uint8_t valid;
 } pos_pid_sync_vofa_snapshot_t;
 

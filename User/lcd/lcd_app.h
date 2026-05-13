@@ -14,4 +14,3 @@ void lcd_app_init(void);
 void lcd_app_update(void);
 
 #endif
-

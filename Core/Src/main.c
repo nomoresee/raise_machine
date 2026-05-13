@@ -63,8 +63,9 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 static float pos_target = 200.0f;
-static float pos_vel = 3.7f;
+static float pos_vel = 1.7f;
 static float beam_vel = 1.0f;
+static float lift_vel = 1.0f;
 //static uint32_t vofa_print_tick = 0U;
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
@@ -134,12 +135,15 @@ int main(void)
   motor[Motor1].ctrl.mode = pos_mode;
   motor[Motor2].ctrl.mode = pos_mode;
   motor[Motor3].ctrl.mode = pos_mode;
+  motor[Motor4].ctrl.mode = pos_mode;
 
   save_pos_zero(&hfdcan1, motor[Motor1].id, POS_MODE);
   HAL_Delay(100);
   save_pos_zero(&hfdcan1, motor[Motor2].id, POS_MODE);
   HAL_Delay(100);
   save_pos_zero(&hfdcan1, motor[Motor3].id, POS_MODE);
+  HAL_Delay(100);
+  save_pos_zero(&hfdcan1, motor[Motor4].id, POS_MODE);
   HAL_Delay(100);
 
   dm_motor_clear_err(&hfdcan1, &motor[Motor1]);
@@ -148,12 +152,16 @@ int main(void)
   HAL_Delay(50);
   dm_motor_clear_err(&hfdcan1, &motor[Motor3]);
   HAL_Delay(50);
+  dm_motor_clear_err(&hfdcan1, &motor[Motor4]);
+  HAL_Delay(50);
 
   dm_motor_enable(&hfdcan1, &motor[Motor1]);
   HAL_Delay(50);
   dm_motor_enable(&hfdcan1, &motor[Motor2]);
   HAL_Delay(50);
   dm_motor_enable(&hfdcan1, &motor[Motor3]);
+  HAL_Delay(50);
+  dm_motor_enable(&hfdcan1, &motor[Motor4]);
   HAL_Delay(50);
 ////////电机同步操作。
   motor_angle_module_init();
@@ -162,6 +170,8 @@ int main(void)
   pos_pid_sync_set_max_vel(pos_vel);
   beam_ctrl_init(&hfdcan1, Motor3);
   beam_ctrl_set_max_vel(beam_vel);
+  lift_ctrl_init(&hfdcan1, Motor4);
+  lift_ctrl_set_max_vel(lift_vel);
   crane_route_init();
   crane_route_start();
 
@@ -169,6 +179,7 @@ int main(void)
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
 
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, GPIO_PIN_SET);
+  
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -181,8 +192,10 @@ int main(void)
     crane_route_process();
     pos_pid_sync_process();
     beam_ctrl_process();
+    lift_ctrl_process();
+
+   
     
-     
   }
     /* USER CODE END WHILE */
 

@@ -27,6 +27,8 @@ static void lcd_app_draw_static(void)
     LCD_ShowString(16, 140, (uint8_t *)"M3P:", WHITE, BLACK, 16, 0);
     LCD_ShowString(16, 160, (uint8_t *)"V1V2:", WHITE, BLACK, 16, 0);
     LCD_ShowString(16, 180, (uint8_t *)"V3:", WHITE, BLACK, 16, 0);
+    LCD_ShowString(16, 200, (uint8_t *)"M4P:", WHITE, BLACK, 16, 0);
+    LCD_ShowString(16, 220, (uint8_t *)"V4:", WHITE, BLACK, 16, 0);
 }
 
 void lcd_app_init(void)
@@ -89,5 +91,10 @@ void lcd_app_update(void)
 
     (void)snprintf(line, sizeof(line), "%8.2f          ", (double)s.motor3_vel);
     lcd_app_print_line(70, 180, line, GREEN);
-}
 
+    (void)snprintf(line, sizeof(line), "%9.2f          ", (double)s.motor4_pos);
+    lcd_app_print_line(70, 200, line, WHITE);
+
+    (void)snprintf(line, sizeof(line), "%8.2f          ", (double)s.motor4_vel);
+    lcd_app_print_line(70, 220, line, GREEN);
+}

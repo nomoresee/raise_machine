@@ -61,6 +61,19 @@ void dm_motor_init(void)
 	motor[Motor3].tmp.PMAX		= 12.5f;
 	motor[Motor3].tmp.VMAX		= 30.0f;
 	motor[Motor3].tmp.TMAX		= 10.0f;
+
+	motor[Motor4].id = 0x04;
+	motor[Motor4].mst_id = 0x14;
+	motor[Motor4].tmp.read_flag = 1;
+	motor[Motor4].ctrl.mode 	= pos_mode;
+	motor[Motor4].ctrl.vel_set 	= 0.0f;
+	motor[Motor4].ctrl.pos_set 	= 0.0f;
+	motor[Motor4].ctrl.tor_set 	= 0.0f;
+	motor[Motor4].ctrl.cur_set 	= 0.0f;
+	motor[Motor4].ctrl.kd_set 	= 1.0f;
+	motor[Motor4].tmp.PMAX		= 12.5f;
+	motor[Motor4].tmp.VMAX		= 30.0f;
+	motor[Motor4].tmp.TMAX		= 10.0f;
 }
 /**
 ************************************************************************
@@ -231,6 +244,11 @@ void fdcan1_rx_callback(void)
 			    case 0x13:
 				 dm_motor_fbdata(&motor[Motor3], rx_data);
 				 receive_motor_data(&motor[Motor3], rx_data);
+				 break;
+
+			    case 0x14:
+				 dm_motor_fbdata(&motor[Motor4], rx_data);
+				 receive_motor_data(&motor[Motor4], rx_data);
 				 break;
 
 				default: break;// 其他ID的处理

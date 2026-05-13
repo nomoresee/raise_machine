@@ -9,6 +9,7 @@ typedef struct
 {
     float chassis_pos;
     float beam_pos;
+    float lift_pos;
 } crane_slot_pose_t;
 
 typedef enum
@@ -25,6 +26,7 @@ void crane_route_start(void);
 void crane_route_stop(void);
 void crane_route_process(void);
 void crane_route_set_slot_pose(uint8_t slot, float chassis_pos, float beam_pos);
+void crane_route_set_slot_lift_pos(uint8_t slot, float lift_pos);
 void crane_route_get_current_target(float *x, float *y);
 crane_route_state_e crane_route_get_state(void);
 uint8_t crane_route_is_finished(void);
