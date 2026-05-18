@@ -3,10 +3,10 @@
 #define LIFT_CTRL_PERIOD_MS        20U
 #define LIFT_CTRL_REACH_TOL        1.2f
 #define LIFT_CTRL_REACH_HOLD_MS    80U
-#define LIFT_CTRL_DEFAULT_MAX_VEL  0.7f
+#define LIFT_CTRL_DEFAULT_MAX_VEL  0.8f
 #define LIFT_CTRL_DIR              1.0f
-#define LIFT_CTRL_POS_RATIO        (1.0f / 30.0f)
-#define LIFT_CTRL_DECEL_RANGE      12.0f
+#define LIFT_CTRL_POS_RATIO        1.0f   /* 输出轴位置 = Δ(raw) × 1，与 3 号 1/30 分开标定 */
+#define LIFT_CTRL_DECEL_RANGE      2.0f
 #define LIFT_CTRL_SETTLE_TOL       0.05f
 #define LIFT_CTRL_VEL_OUT_MIN      0.18f
 #define LIFT_CTRL_VEL_STEP_UP      0.05f

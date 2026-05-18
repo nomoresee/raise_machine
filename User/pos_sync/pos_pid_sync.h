@@ -68,11 +68,11 @@ typedef struct
     float motor2_pos;
     float pos_error;
     float motor3_pos;
-    float motor1_vel;
+    float motor1_vel; /* 底盘：与 motor_angle 同源的几何速度（统一方向 Δpos/Δt），非驱动器 vel 原始值 */
     float motor2_vel;
-    float motor3_vel;
+    float motor3_vel; /* 与 beam_ctrl 输出轴位置同源的几何速度 Δpos/Δt */
     float motor4_pos;
-    float motor4_vel;
+    float motor4_vel; /* 与 lift_ctrl 输出轴位置同源的几何速度 Δpos/Δt */
     uint8_t valid;
 } pos_pid_sync_vofa_snapshot_t;
 

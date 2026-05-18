@@ -1,4 +1,4 @@
-#include "headfile.h"
+﻿#include "headfile.h"
 
 #define POS_PID_SYNC_PERIOD_MS       20U///pid计算周期
 
@@ -7,6 +7,7 @@
 #define POS_PID_SYNC_MOTOR1_DIR      1.0f
 #define POS_PID_SYNC_MOTOR2_DIR     -1.0f
 #define POS_PID_SYNC_MOTOR3_DIR      1.0f /* 与 beam_ctrl 中 BEAM_CTRL_DIR 保持一致 */
+#define POS_PID_SYNC_MOTOR4_DIR      1.0f /* 与 lift_ctrl 中 LIFT_CTRL_DIR 保持一致 */
 
 #define POS_PID_SYNC_POS_KP          0.20f//整体位置外环，判断两台电机平均位置离目标还有多远
 #define POS_PID_SYNC_POS_KI          0.0f
@@ -19,6 +20,12 @@
 #define POS_PID_SYNC_BAL_KD          0.0f
 #define POS_PID_SYNC_BAL_OUT_MAX     2.0f
 #define POS_PID_SYNC_BAL_OUT_MIN    -2.0f
+#undef POS_PID_SYNC_BAL_KP
+#undef POS_PID_SYNC_BAL_OUT_MAX
+#undef POS_PID_SYNC_BAL_OUT_MIN
+#define POS_PID_SYNC_BAL_KP          0.08f
+#define POS_PID_SYNC_BAL_OUT_MAX     0.8f
+#define POS_PID_SYNC_BAL_OUT_MIN    -0.8f
 
 #define POS_PID_SYNC_VEL_KP          0.20f//速度给定环，根据位置误差和当前速度算下发速度
 #define POS_PID_SYNC_VEL_KI          0.0f
@@ -30,7 +37,17 @@
 #define POS_PID_SYNC_SM_DWELL_MS     2000U
 #define POS_PID_SYNC_SM_REACH_TOL    5.0f
 #define POS_PID_SYNC_REACH_TOL       5.0f
+#define POS_PID_SYNC_SYNC_REACH_TOL  2.0f
 #define POS_PID_SYNC_REACH_HOLD_MS   80U
+#define POS_PID_SYNC_SETTLE_TOL      1.0f
+#define POS_PID_SYNC_SYNC_DEADBAND   0.8f
+#define POS_PID_SYNC_HOLD_VEL        0.0f
+
+/* === 到位减速坡道：|err| < DECEL_RANGE 时，cmd_vel 上限按距离线性收缩到 0，
+ *     再叠加按当前速度可停下的距离约束，避免过冲震荡 === */
+#define POS_PID_SYNC_DECEL_RANGE     200.0f   /* 减速带宽度（与 motor_angle 位置单位一致） */
+#define POS_PID_SYNC_DECEL_MIN_VEL   0.30f   /* 接近目标但未进入 SETTLE 时的最小限速，避免趴下 */
+#define POS_PID_SYNC_DECEL_ACCEL     80.0f   /* 等效减速度（输出轴速度单位/秒），用于按 v^2/2a 估剩余距 */
 
 typedef struct
 {
@@ -52,6 +69,19 @@ typedef struct
     pid_para_t vel_pid;
 
     pos_pid_sync_vofa_snapshot_t vofa_snapshot;
+
+    /* 底盘速度：与 motor_angle 同源（统一方向后 Δpos/Δt），避免两路驱动器 vel 刻度不一致 */
+    float vofa_last_m1_raw;
+    float vofa_last_m2_raw;
+    float vofa_last_m3_raw;
+    float vofa_last_m4_raw;
+    uint32_t vofa_last_ms;
+    uint8_t vofa_geom_inited;
+
+    float track_m1;
+    float track_m2;
+    uint32_t track_ms;
+    uint8_t track_inited;
 } pos_pid_sync_t;
 
 static pos_pid_sync_t pos_pid_sync;
@@ -146,47 +176,77 @@ static void pos_pid_sync_send(motor_t *motor_ptr, float pos, float output_vel)
 /**
 ***********************************************************************
 * @brief:      pos_pid_sync_vofa_print(...)
-* @details:    VOFA+ FireWater：1/2 位置，1-2 位置误差，3 号位置，1/2/3 速度。
+* @details:    VOFA+ FireWater：目标/左右多圈位置/位置误差；5、6 列为与位置同源的几何速度（统一方向后 Δpos/Δt）。
 ***********************************************************************
 **/
 static void pos_pid_sync_vofa_print(float motor1_pos,
                                     float motor2_pos,
-                                    float pos_error,
+                                    float sync_error,
                                     float target_x,
                                     float target_y,
+                                    float target_z,
                                     float motor3_pos,
-                                    float motor1_vel,
-                                    float motor2_vel,
-                                    float motor3_vel,
-                                    float motor4_pos,
-                                    float motor4_vel)
+                                    float motor4_pos)
 {
+    float motor1_show = POS_PID_SYNC_MOTOR1_DIR * motor1_pos;
+    float motor2_show = POS_PID_SYNC_MOTOR2_DIR * motor2_pos;
+    float target_error = pos_pid_sync_absf(pos_pid_sync_absf(motor1_show) - pos_pid_sync_absf(motor2_show));
+    uint32_t now_ms = HAL_GetTick();
+    float dt_s;
+    float geom_m1_vel = 0.0f;
+    float geom_m2_vel = 0.0f;
+    float geom_m3_vel = 0.0f;
+    float geom_m4_vel = 0.0f;
+
+    (void)sync_error;
+
+    if (pos_pid_sync.vofa_geom_inited != 0U)
+    {
+        dt_s = ((float)(now_ms - pos_pid_sync.vofa_last_ms)) * 0.001f;
+        if (dt_s < 0.0005f)
+        {
+            dt_s = (float)POS_PID_SYNC_PRINT_MS * 0.001f;
+        }
+        geom_m1_vel = POS_PID_SYNC_MOTOR1_DIR * (motor1_pos - pos_pid_sync.vofa_last_m1_raw) / dt_s;
+        geom_m2_vel = POS_PID_SYNC_MOTOR2_DIR * (motor2_pos - pos_pid_sync.vofa_last_m2_raw) / dt_s;
+        geom_m3_vel = POS_PID_SYNC_MOTOR3_DIR * (motor3_pos - pos_pid_sync.vofa_last_m3_raw) / dt_s;
+        geom_m4_vel = POS_PID_SYNC_MOTOR4_DIR * (motor4_pos - pos_pid_sync.vofa_last_m4_raw) / dt_s;
+    }
+
+    pos_pid_sync.vofa_last_m1_raw = motor1_pos;
+    pos_pid_sync.vofa_last_m2_raw = motor2_pos;
+    pos_pid_sync.vofa_last_m3_raw = motor3_pos;
+    pos_pid_sync.vofa_last_m4_raw = motor4_pos;
+    pos_pid_sync.vofa_last_ms = now_ms;
+    pos_pid_sync.vofa_geom_inited = 1U;
+
     /* 缓存给 LCD 使用：与 VOFA 输出同源 */
     pos_pid_sync.vofa_snapshot.target_x = target_x;
     pos_pid_sync.vofa_snapshot.target_y = target_y;
-    pos_pid_sync.vofa_snapshot.motor1_pos = motor1_pos;
-    pos_pid_sync.vofa_snapshot.motor2_pos = motor2_pos;
-    pos_pid_sync.vofa_snapshot.pos_error = pos_error;
+    pos_pid_sync.vofa_snapshot.motor1_pos = motor1_show;
+    pos_pid_sync.vofa_snapshot.motor2_pos = motor2_show;
+    pos_pid_sync.vofa_snapshot.pos_error = target_error;
     pos_pid_sync.vofa_snapshot.motor3_pos = motor3_pos;
-    pos_pid_sync.vofa_snapshot.motor1_vel = motor1_vel;
-    pos_pid_sync.vofa_snapshot.motor2_vel = motor2_vel;
-    pos_pid_sync.vofa_snapshot.motor3_vel = motor3_vel;
+    pos_pid_sync.vofa_snapshot.motor1_vel = geom_m1_vel;
+    pos_pid_sync.vofa_snapshot.motor2_vel = geom_m2_vel;
+    pos_pid_sync.vofa_snapshot.motor3_vel = geom_m3_vel;
     pos_pid_sync.vofa_snapshot.motor4_pos = motor4_pos;
-    pos_pid_sync.vofa_snapshot.motor4_vel = motor4_vel;
+    pos_pid_sync.vofa_snapshot.motor4_vel = geom_m4_vel;
     pos_pid_sync.vofa_snapshot.valid = 1U;
 
-    printf("%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\r\n",
+    printf("%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\r\n",
            target_x,
+           motor1_show,
+           motor2_show,
+           target_error,
+           geom_m1_vel,
+           geom_m2_vel,
            target_y,
-           motor1_pos,
-           motor2_pos,
-           pos_error,
            motor3_pos,
-           motor1_vel,
-           motor2_vel,
-           motor3_vel,
+           geom_m3_vel,
+           target_z,
            motor4_pos,
-           motor4_vel);
+           geom_m4_vel);
 }
 
 uint8_t pos_pid_sync_get_vofa_snapshot(pos_pid_sync_vofa_snapshot_t *out)
@@ -280,6 +340,8 @@ void pos_pid_sync_start(void)
     pos_pid_sync.busy = 1U;
     pos_pid_sync.arrived = 0U;
     pos_pid_sync.reach_tick = HAL_GetTick();
+    pos_pid_sync.vofa_geom_inited = 0U;
+    pos_pid_sync.track_inited = 0U;
 }
 
 void pos_pid_sync_stop(void)
@@ -287,12 +349,17 @@ void pos_pid_sync_stop(void)
     pos_pid_sync.enabled = 0U;
     pos_pid_sync.busy = 0U;
     pos_pid_sync.arrived = 1U;
+    pos_pid_sync.vofa_geom_inited = 0U;
+    pos_pid_sync.track_inited = 0U;
 }
 
 uint8_t pos_pid_sync_is_busy(void)
 {
     uint32_t now_tick;
     float pos_error;
+    float motor1_pos;
+    float motor2_pos;
+    float sync_error;
 
     if ((pos_pid_sync.enabled == 0U) || (pos_pid_sync.hcan == NULL))
     {
@@ -302,8 +369,12 @@ uint8_t pos_pid_sync_is_busy(void)
     now_tick = HAL_GetTick();
     pos_pid_sync.current_pos = pos_pid_sync_get_current_pos();
     pos_error = pos_pid_sync_absf(pos_pid_sync.target_pos - pos_pid_sync.current_pos);
+    motor1_pos = POS_PID_SYNC_MOTOR1_DIR * motor_angle_get(pos_pid_sync.motor1_index);
+    motor2_pos = POS_PID_SYNC_MOTOR2_DIR * motor_angle_get(pos_pid_sync.motor2_index);
+    sync_error = pos_pid_sync_absf(motor1_pos - motor2_pos);
 
-    if (pos_error <= pos_pid_sync.reach_tol)
+    if ((pos_error <= pos_pid_sync.reach_tol) &&
+        (sync_error <= POS_PID_SYNC_SYNC_REACH_TOL))
     {
         if ((now_tick - pos_pid_sync.reach_tick) >= POS_PID_SYNC_REACH_HOLD_MS)
         {
@@ -442,19 +513,18 @@ void pos_pid_sync_process(void)
 
     motor_t *motor1;        // 电机 1 的控制结构体指针，用于读取反馈并下发控制量。
     motor_t *motor2;        // 电机 2 的控制结构体指针，用于读取反馈并下发控制量。
-    motor_t *motor3;        // 电机 3：VOFA 调试输出用。
-    motor_t *motor4;        // 电机 4：升降轴 VOFA/LCD 输出用。
     uint32_t now_tick;      // 当前系统毫秒计时，用来控制 PID 计算周期和打印周期。
     float motor1_pos;       // 电机 1 按同步方向修正后的实际位置反馈。
     float motor2_pos;       // 电机 2 按同步方向修正后的实际位置反馈。
     float motor1_vel;       // 电机 1 按同步方向修正后的实际速度反馈。
     float motor2_vel;       // 电机 2 按同步方向修正后的实际速度反馈。
-    float motor3_pos;     // 电机 3 位置（与 beam 方向一致）。
-    float motor3_vel;     // 电机 3 速度（与 beam 方向一致）。
-    float motor4_pos;     // 电机 4 升降位置。
-    float motor4_vel;     // 电机 4 升降速度。
+    float motor3_pos;     // 电机 3 位置（与 beam_ctrl 输出轴坐标一致）。
+    float motor4_pos;     // 电机 4 升降位置（与 lift_ctrl 输出轴坐标一致）。
     float target_x;
     float target_y;
+    float target_z;
+    float target_error;
+    float sync_error;
     float avg_pos;          // 两台电机的平均位置，代表双电机系统的整体当前位置。
     float avg_vel;          // 两台电机速度绝对值的平均值，代表当前整体运动速度。
     float pos_offset;       // 位置外环输出，用平均位置误差计算整体位置补偿量。
@@ -477,26 +547,105 @@ void pos_pid_sync_process(void)
 
     motor1 = &motor[pos_pid_sync.motor1_index]; // 根据初始化时保存的索引找到电机 1。
     motor2 = &motor[pos_pid_sync.motor2_index]; // 根据初始化时保存的索引找到电机 2。
-    motor3 = &motor[Motor3];
-    motor4 = &motor[Motor4];
-    crane_route_get_current_target(&target_x, &target_y);
+    crane_route_get_current_pose_target(&target_x, &target_y, &target_z);
     motor_angle_update(); // 更新已登记电机的多圈位置。
 
     motor1_pos = POS_PID_SYNC_MOTOR1_DIR * motor_angle_get(pos_pid_sync.motor1_index); // 读取电机 1 位置，并用方向系数统一正方向。
     motor2_pos = POS_PID_SYNC_MOTOR2_DIR * motor_angle_get(pos_pid_sync.motor2_index); // 读取电机 2 位置，并用方向系数统一正方向。
-    motor1_vel = POS_PID_SYNC_MOTOR1_DIR * motor1->para.vel; // 读取电机 1 速度，并用方向系数统一正方向。
-    motor2_vel = POS_PID_SYNC_MOTOR2_DIR * motor2->para.vel; // 读取电机 2 速度，并用方向系数统一正方向。
-    motor3_pos = POS_PID_SYNC_MOTOR3_DIR * motor_angle_get(Motor3);
-    motor3_vel = POS_PID_SYNC_MOTOR3_DIR * motor3->para.vel;
+    motor1_vel = POS_PID_SYNC_MOTOR1_DIR * motor1->para.vel; // 驱动器反馈速度（仅作备用，avg_vel 优先用几何速度）
+    motor2_vel = POS_PID_SYNC_MOTOR2_DIR * motor2->para.vel;
+    motor3_pos = beam_ctrl_get_current_pos();
     motor4_pos = lift_ctrl_get_current_pos();
-    motor4_vel = motor4->para.vel;
     avg_pos = 0.5f * (motor1_pos + motor2_pos); // 计算平均位置，用于判断整体距离目标位置还有多远。
-    avg_vel = 0.5f * (pos_pid_sync_absf(motor1_vel) + pos_pid_sync_absf(motor2_vel)); // 计算平均速度幅值，用于速度环反馈。
+    if (pos_pid_sync.track_inited == 0U)
+    {
+        pos_pid_sync.track_m1 = motor1_pos;
+        pos_pid_sync.track_m2 = motor2_pos;
+        pos_pid_sync.track_ms = now_tick;
+        pos_pid_sync.track_inited = 1U;
+        avg_vel = 0.5f * (pos_pid_sync_absf(motor1_vel) + pos_pid_sync_absf(motor2_vel));
+    }
+    else
+    {
+        float dt_trk = ((float)(now_tick - pos_pid_sync.track_ms)) * 0.001f;
+        if (dt_trk < 0.0005f)
+        {
+            avg_vel = 0.5f * (pos_pid_sync_absf(motor1_vel) + pos_pid_sync_absf(motor2_vel));
+        }
+        else
+        {
+            float g1 = (motor1_pos - pos_pid_sync.track_m1) / dt_trk;
+            float g2 = (motor2_pos - pos_pid_sync.track_m2) / dt_trk;
+            avg_vel = 0.5f * (pos_pid_sync_absf(g1) + pos_pid_sync_absf(g2));
+        }
+        pos_pid_sync.track_m1 = motor1_pos;
+        pos_pid_sync.track_m2 = motor2_pos;
+        pos_pid_sync.track_ms = now_tick;
+    }
+    target_error = pos_pid_sync.target_pos - avg_pos;
+    sync_error = motor1_pos - motor2_pos;
 
+    if ((pos_pid_sync_absf(target_error) <= POS_PID_SYNC_SETTLE_TOL) &&
+        (pos_pid_sync_absf(sync_error) <= POS_PID_SYNC_SYNC_DEADBAND))
+    {
+        pos_offset = 0.0f;
+        balance_offset = 0.0f;
+        cmd_vel = POS_PID_SYNC_HOLD_VEL;
+        pid_clear(&pos_pid_sync.pos_pid);
+        pid_clear(&pos_pid_sync.balance_pid);
+        pid_clear(&pos_pid_sync.vel_pid);
+    }
+    else
+    {
     pos_offset = parallel_pid_ctrl(&pos_pid_sync.pos_pid, pos_pid_sync.target_pos, avg_pos); // 位置外环：目标位置与平均位置做 PID，输出整体位置补偿。
-    balance_offset = parallel_pid_ctrl(&pos_pid_sync.balance_pid, 0.0f, motor1_pos - motor2_pos); // 同步环：目标位置差为 0，输出两台电机的反向修正量。
-    cmd_vel = parallel_pid_ctrl(&pos_pid_sync.vel_pid, pos_pid_sync_absf(pos_offset), avg_vel); // 速度环：位置误差越大，允许速度越高；接近目标后速度降低。
-    cmd_vel = pos_pid_sync_clampf(cmd_vel, 0.0f, pos_pid_sync.max_output_vel); // 限制输出轴速度，防止速度指令超出允许范围。
+        if (pos_pid_sync_absf(sync_error) <= POS_PID_SYNC_SYNC_DEADBAND)
+        {
+            balance_offset = 0.0f;
+            pid_clear(&pos_pid_sync.balance_pid);
+        }
+        else
+        {
+            balance_offset = parallel_pid_ctrl(&pos_pid_sync.balance_pid, 0.0f, sync_error);
+        }
+        cmd_vel = parallel_pid_ctrl(&pos_pid_sync.vel_pid, pos_pid_sync_absf(target_error), avg_vel);
+        cmd_vel = pos_pid_sync_clampf(cmd_vel, 0.0f, pos_pid_sync.max_output_vel);
+
+        /* ---- 到位减速坡道：进入 DECEL_RANGE 后，将 cmd_vel 上限按距离线性收紧 ---- */
+        {
+            float abs_err = pos_pid_sync_absf(target_error);
+            float ramp_vel = pos_pid_sync.max_output_vel;
+
+            if (abs_err < POS_PID_SYNC_DECEL_RANGE)
+            {
+                ramp_vel = pos_pid_sync.max_output_vel * (abs_err / POS_PID_SYNC_DECEL_RANGE);
+
+                /* 还在工作区内时给个最小限速，避免被 PID/速度噪声卡死无法继续靠近 */
+                if ((abs_err > POS_PID_SYNC_SETTLE_TOL) && (ramp_vel < POS_PID_SYNC_DECEL_MIN_VEL))
+                {
+                    ramp_vel = POS_PID_SYNC_DECEL_MIN_VEL;
+                }
+            }
+
+            /* 二次约束：按 v = sqrt(2 * a * s) 计算「当前距离最大允许速度」，
+             * 让减速过程平滑到 0，避免靠近时仍以坡道边界速度冲过去 */
+            {
+                float brake_vel = sqrtf(2.0f * POS_PID_SYNC_DECEL_ACCEL * abs_err);
+                if (brake_vel < ramp_vel)
+                {
+                    ramp_vel = brake_vel;
+                }
+            }
+
+            if (cmd_vel > ramp_vel)
+            {
+                cmd_vel = ramp_vel;
+            }
+            if (cmd_vel < 0.0f)
+            {
+                cmd_vel = 0.0f;
+            }
+        }
+    }
 
     motor1_cmd_pos = pos_pid_sync.target_pos + pos_offset - balance_offset; // 电机 1 目标位置 = 公共目标 + 整体补偿 - 同步修正。
     motor2_cmd_pos = pos_pid_sync.target_pos + pos_offset + balance_offset; // 电机 2 目标位置 = 公共目标 + 整体补偿 + 同步修正。
@@ -507,16 +656,14 @@ void pos_pid_sync_process(void)
     if ((now_tick - pos_pid_sync.print_tick) >= POS_PID_SYNC_PRINT_MS) // 到达打印周期后输出调试数据。
     {
         pos_pid_sync.print_tick = now_tick; // 更新时间戳，控制下一次 VOFA 打印间隔。
-        pos_pid_sync_vofa_print(motor1_pos,
-                                motor2_pos,
-                                motor1_pos - motor2_pos,
+        pos_pid_sync_vofa_print(motor_angle_get(pos_pid_sync.motor1_index),
+                                motor_angle_get(pos_pid_sync.motor2_index),
+                                motor_angle_get(pos_pid_sync.motor1_index) +
+                                motor_angle_get(pos_pid_sync.motor2_index),
                                 target_x,
                                 target_y,
+                                target_z,
                                 motor3_pos,
-                                motor1_vel,
-                                motor2_vel,
-                                motor3_vel,
-                                motor4_pos,
-                                motor4_vel);
+                                motor4_pos);
     }
 }

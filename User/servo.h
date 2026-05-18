@@ -17,7 +17,7 @@
 #define SERVO1_GRIP_CLOSE_ANGLE  90.0f
 #define SERVO1_GRIP_STEP_DEG      4.0f
 #define SERVO1_GRIP_STEP_DELAY_MS 30U
-#define SERVO1_GRIP_HOLD_MS      500U
+#define SERVO1_GRIP_HOLD_MS      1000U
 
 float servo_clamp_angle(float angle_deg);
 uint32_t servo_angle_to_compare(float angle_deg);
@@ -38,4 +38,4 @@ void servo_sync_move_custom(float servo1_target_deg, float servo2_target_deg,
                             float servo1_step_deg, float servo2_step_deg,
                             uint32_t step_delay_ms);
 
-#endif
+#endif /* __SERVO_H__ */
