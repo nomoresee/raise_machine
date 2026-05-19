@@ -139,42 +139,51 @@ int main(void)
   motor[Motor4].ctrl.mode = pos_mode;
 
   dm_motor_disable(&hfdcan1, &motor[Motor1]);
-  HAL_Delay(50);
+  HAL_Delay(30);
   dm_motor_disable(&hfdcan1, &motor[Motor2]);
-  HAL_Delay(50);
+  HAL_Delay(30);
   dm_motor_disable(&hfdcan1, &motor[Motor3]);
-  HAL_Delay(50);
+  HAL_Delay(30);
   dm_motor_disable(&hfdcan1, &motor[Motor4]);
-  HAL_Delay(100);
-
-  save_pos_zero(&hfdcan1, motor[Motor1].id, POS_MODE);
-  HAL_Delay(100);
-  save_pos_zero(&hfdcan1, motor[Motor2].id, POS_MODE);
-  HAL_Delay(100);
-  save_pos_zero(&hfdcan1, motor[Motor3].id, POS_MODE);
-  HAL_Delay(100);
-  save_pos_zero(&hfdcan1, motor[Motor4].id, POS_MODE);
-  HAL_Delay(300);
+  HAL_Delay(50);
 
   dm_motor_clear_err(&hfdcan1, &motor[Motor1]);
-  HAL_Delay(50);
+  HAL_Delay(30);
   dm_motor_clear_err(&hfdcan1, &motor[Motor2]);
-  HAL_Delay(50);
+  HAL_Delay(30);
   dm_motor_clear_err(&hfdcan1, &motor[Motor3]);
+  HAL_Delay(30);
+  dm_motor_clear_err(&hfdcan1, &motor[Motor4]);
   HAL_Delay(50);
+
+  save_pos_zero(&hfdcan1, motor[Motor1].id, POS_MODE);
+  HAL_Delay(150);
+  save_pos_zero(&hfdcan1, motor[Motor2].id, POS_MODE);
+  HAL_Delay(150);
+  save_pos_zero(&hfdcan1, motor[Motor3].id, POS_MODE);
+  HAL_Delay(150);
+  save_pos_zero(&hfdcan1, motor[Motor4].id, POS_MODE);
+  HAL_Delay(200);
+
+  dm_motor_clear_err(&hfdcan1, &motor[Motor1]);
+  HAL_Delay(30);
+  dm_motor_clear_err(&hfdcan1, &motor[Motor2]);
+  HAL_Delay(30);
+  dm_motor_clear_err(&hfdcan1, &motor[Motor3]);
+  HAL_Delay(30);
   dm_motor_clear_err(&hfdcan1, &motor[Motor4]);
   HAL_Delay(50);
 
   dm_motor_enable(&hfdcan1, &motor[Motor1]);
-  HAL_Delay(50);
+  HAL_Delay(30);
   dm_motor_enable(&hfdcan1, &motor[Motor2]);
-  HAL_Delay(50);
+  HAL_Delay(30);
   dm_motor_enable(&hfdcan1, &motor[Motor3]);
-  HAL_Delay(50);
+  HAL_Delay(30);
   dm_motor_enable(&hfdcan1, &motor[Motor4]);
   HAL_Delay(50);
+
 ////////电机同步操作。
-  HAL_Delay(200);
   motor_angle_module_init();
   pos_pid_sync_init(&hfdcan1, Motor1, Motor2);
   pos_pid_sync_set_target(pos_target);
