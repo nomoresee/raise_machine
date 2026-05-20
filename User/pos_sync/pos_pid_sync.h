@@ -37,8 +37,8 @@ float pos_pid_sync_get_current_pos(void);
 * @param:      max_vel：输出轴最大速度
 * @retval:     void
 * @details:    设置输出轴速度设定值（与改轨迹规划前 pos_vel 语义相同）。
-*              内部 × RATIO(30) 换算为电机侧 rad/s，并钳到 MOTOR_VMAX(30)。
-*              例如 pos_vel=1.0 → 30 rad/s；pos_vel=3.0 → 仍顶在 30 rad/s（与旧版一致）。
+*              内部 × RATIO(30) 换算为电机侧 rad/s，并钳到 MOTOR_VMAX(60)。
+*              例如 pos_vel=1.0 → 60 rad/s；pos_vel=3.0 → 仍顶在 60 rad/s（与旧版一致）。
 ***********************************************************************
 **/
 void pos_pid_sync_set_max_vel(float max_vel);

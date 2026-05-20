@@ -18,12 +18,12 @@
 
 /* === 速度/换算/到位判定 ===
  *  pos_vel（main.c）语义不变：输出轴速度设定值，内部 × RATIO 换算为电机侧 rad/s。
- *  电机侧上限 MOTOR_VMAX（30 rad/s），超过会在 DM 12 位量化里环绕成乱值。
- *  因此 pos_vel > MOTOR_VMAX/RATIO（=1.0）时，实际仍顶在 30 rad/s，与改轨迹规划前一致。
+ *  电机侧上限 MOTOR_VMAX（60 rad/s），超过会在 DM 12 位量化里环绕成乱值。
+ *  因此 pos_vel > MOTOR_VMAX/RATIO/SPEED_GAIN（=0.6667）时，实际仍顶在 60 rad/s。
  *  注意：不要用 0.95 去钳 pos_vel 本身——会把 pos_vel=3 误钳成 0.95，体感慢约 3 倍。 */
 #define POS_PID_SYNC_VEL_CMD_RATIO   30.0f
 #define POS_PID_SYNC_VEL_SPEED_GAIN  3.0f    /* 相对旧版 pos_vel 的额外提速倍率（用户体感偏慢时启用） */
-#define POS_PID_SYNC_MOTOR_VMAX      30.0f   /* 与 motor[].tmp.VMAX 保持一致 */
+#define POS_PID_SYNC_MOTOR_VMAX      60.0f   /* 与 motor[].tmp.VMAX 保持一致 */
 #define POS_PID_SYNC_VEL_OUT_MAX     (POS_PID_SYNC_MOTOR_VMAX / (POS_PID_SYNC_VEL_CMD_RATIO * POS_PID_SYNC_VEL_SPEED_GAIN))
 
 #define POS_PID_SYNC_REACH_TOL       5.0f
