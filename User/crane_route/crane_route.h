@@ -13,7 +13,7 @@
 #define CRANE_ROUTE_BEAM_ONLY       0U
 
 /* 1: chassis-only debug, only run pos_pid_sync along chassis_pos route */
-#define CRANE_ROUTE_CHASSIS_ONLY    1U
+#define CRANE_ROUTE_CHASSIS_ONLY    0U
 
 typedef struct
 {
