@@ -1,6 +1,9 @@
 #include "headfile.h"
 
 #define MOTOR_ANGLE_DEFAULT_PMAX      12.5f
+#define MOTOR_ANGLE_RAW_EPS           0.0005f
+#define MOTOR_ANGLE_VEL_DEADBAND      0.05f
+#define MOTOR_ANGLE_MAX_WRAP_SEARCH   4
 
 typedef struct
 {
@@ -10,6 +13,7 @@ typedef struct
     float pos_ratio;
     float last_raw_pos;
     float actual_pos;
+    uint32_t last_update_ms;
 } motor_angle_state_t;
 
 static motor_angle_state_t motor_angle_state[MOTOR_ANGLE_MAX_TRACKED];
@@ -72,11 +76,14 @@ static float motor_angle_get_half_range(const motor_t *motor_ptr)
 static void motor_angle_update_one(motor_angle_state_t *state)
 {
     motor_t *motor_ptr;
+    uint32_t now_ms;
     float half_range;
     float full_range;
     float half_full_range;
     float raw_pos;
     float delta;
+    float abs_vel;
+    float dt_s;
 
     if ((state == NULL) || (state->used == 0U))
     {
@@ -88,18 +95,48 @@ static void motor_angle_update_one(motor_angle_state_t *state)
     full_range = 2.0f * half_range;
     half_full_range = 0.5f * full_range;
     raw_pos = motor_ptr->para.pos;
+    now_ms = HAL_GetTick();
 
     if (state->initialized == 0U)
     {
         state->initialized = 1U;
         state->last_raw_pos = raw_pos;
         state->actual_pos = raw_pos * state->pos_ratio;
+        state->last_update_ms = now_ms;
         return;
     }
 
     delta = raw_pos - state->last_raw_pos;
+    if (motor_angle_absf(delta) <= MOTOR_ANGLE_RAW_EPS)
+    {
+        return;
+    }
 
-    if (delta > half_full_range)
+    abs_vel = motor_angle_absf(motor_ptr->para.vel);
+    dt_s = ((float)(now_ms - state->last_update_ms)) * 0.001f;
+
+    if ((abs_vel > MOTOR_ANGLE_VEL_DEADBAND) && (dt_s > 0.0005f))
+    {
+        float expected_delta = motor_ptr->para.vel * dt_s;
+        float best_delta = delta;
+        float best_err = motor_angle_absf(delta - expected_delta);
+        int wrap;
+
+        for (wrap = -MOTOR_ANGLE_MAX_WRAP_SEARCH; wrap <= MOTOR_ANGLE_MAX_WRAP_SEARCH; wrap++)
+        {
+            float candidate = delta + ((float)wrap * full_range);
+            float err = motor_angle_absf(candidate - expected_delta);
+
+            if (err < best_err)
+            {
+                best_err = err;
+                best_delta = candidate;
+            }
+        }
+
+        delta = best_delta;
+    }
+    else if (delta > half_full_range)
     {
         delta -= full_range;
     }
@@ -110,6 +147,7 @@ static void motor_angle_update_one(motor_angle_state_t *state)
 
     state->actual_pos += delta * state->pos_ratio;
     state->last_raw_pos = raw_pos;
+    state->last_update_ms = now_ms;
 }
 
 /**
@@ -203,6 +241,7 @@ void motor_angle_reset(void)
         motor_angle_state[i].initialized = 0U;
         motor_angle_state[i].last_raw_pos = 0.0f;
         motor_angle_state[i].actual_pos = 0.0f;
+        motor_angle_state[i].last_update_ms = 0U;
     }
 }
 
@@ -218,6 +257,7 @@ void motor_angle_reset_one(motor_num motor_index)
             motor_angle_state[i].initialized = 0U;
             motor_angle_state[i].last_raw_pos = 0.0f;
             motor_angle_state[i].actual_pos = 0.0f;
+            motor_angle_state[i].last_update_ms = 0U;
             return;
         }
     }

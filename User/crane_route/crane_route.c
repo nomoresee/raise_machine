@@ -29,12 +29,12 @@ static crane_slot_pose_t crane_route_slot_pose[CRANE_ROUTE_SLOT_COUNT + 1U] =
 
 static const crane_route_step_t crane_route_steps[CRANE_ROUTE_STEP_COUNT] =
 {
-    {4U, CRANE_ROUTE_ACTION_PICK},
-    {5U, CRANE_ROUTE_ACTION_PLACE},
-    {6U, CRANE_ROUTE_ACTION_PICK},
+    {1U, CRANE_ROUTE_ACTION_PICK},
+    {4U, CRANE_ROUTE_ACTION_PLACE},
+    {2U, CRANE_ROUTE_ACTION_PICK},
     {7U, CRANE_ROUTE_ACTION_PLACE},
-    {8U, CRANE_ROUTE_ACTION_PICK},
-    {0U, CRANE_ROUTE_ACTION_PLACE},
+    {3U, CRANE_ROUTE_ACTION_PICK},
+    {8U, CRANE_ROUTE_ACTION_PLACE},
     {0U, CRANE_ROUTE_ACTION_PLACE},
 };
 
@@ -52,7 +52,10 @@ static crane_route_t crane_route;
 
 static void crane_route_move_xy_to_slot(uint8_t slot)
 {
-#if (CRANE_ROUTE_BEAM_ONLY != 0U)
+#if (CRANE_ROUTE_CHASSIS_ONLY != 0U)
+    pos_pid_sync_set_target(crane_route_slot_pose[slot].chassis_pos);
+    pos_pid_sync_start();
+#elif (CRANE_ROUTE_BEAM_ONLY != 0U)
     beam_ctrl_set_target(crane_route_slot_pose[slot].beam_pos);
     beam_ctrl_start();
 #else
@@ -250,7 +253,7 @@ void crane_route_process(void)
             crane_route.current_slot = slot;
             crane_route.current_action = crane_route_steps[crane_route.step_index].action;
             crane_route_move_xy_to_slot(slot);
-#if (CRANE_ROUTE_BEAM_ONLY != 0U)
+#if ((CRANE_ROUTE_CHASSIS_ONLY != 0U) || (CRANE_ROUTE_BEAM_ONLY != 0U))
             crane_route.state = CRANE_ROUTE_WAIT_XY_ARRIVE;
 #else
             if (slot == 0U)
@@ -270,7 +273,13 @@ void crane_route_process(void)
             break;
 
         case CRANE_ROUTE_WAIT_XY_ARRIVE:
-#if (CRANE_ROUTE_BEAM_ONLY != 0U)
+#if (CRANE_ROUTE_CHASSIS_ONLY != 0U)
+            if (pos_pid_sync_is_busy() == 0U)
+            {
+                crane_route.dwell_tick = HAL_GetTick();
+                crane_route.state = CRANE_ROUTE_STEP_DWELL;
+            }
+#elif (CRANE_ROUTE_BEAM_ONLY != 0U)
             if (beam_ctrl_is_busy() == 0U)
             {
                 crane_route.dwell_tick = HAL_GetTick();

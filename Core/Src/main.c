@@ -63,8 +63,8 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 static float pos_target = 200.0f;
-static float pos_vel = 1.0f;
-static float beam_vel = 1.05f;
+static float pos_vel = 1.5f;
+static float beam_vel = 0.8f;
 static float lift_vel = 3.5f;
 //static uint32_t vofa_print_tick = 0U;
 
@@ -194,12 +194,11 @@ int main(void)
   lift_ctrl_set_max_vel(lift_vel);
   crane_route_init();
   crane_route_start();
-
-#if (CRANE_ROUTE_USE_SERVO != 0U)
+//////舵机初始化定时器
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
-  servo1_set_angle(SERVO1_GRIP_OPEN_ANGLE);
-#endif
+
+
 
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, GPIO_PIN_SET);
 
@@ -218,6 +217,11 @@ int main(void)
     pos_pid_sync_process();
     beam_ctrl_process();
     lift_ctrl_process();
+
+    // servo_sync_move(0,0);
+    // HAL_Delay(1000);
+    // servo_sync_move(90,90);
+    // HAL_Delay(5000);
   }
   /* USER CODE END WHILE */
 

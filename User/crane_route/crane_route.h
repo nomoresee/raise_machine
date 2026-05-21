@@ -10,7 +10,10 @@
 #define CRANE_ROUTE_PICK_DWELL_MS   1000U  /* 无舵机时：升降工作位停留时间（ms） */
 
 /* 1：仅横梁按路线槽位 beam_pos 逐点走位，底盘/升降/夹爪不动作；0：整机联动 */
-#define CRANE_ROUTE_BEAM_ONLY       1U
+#define CRANE_ROUTE_BEAM_ONLY       0U
+
+/* 1: chassis-only debug, only run pos_pid_sync along chassis_pos route */
+#define CRANE_ROUTE_CHASSIS_ONLY    1U
 
 typedef struct
 {

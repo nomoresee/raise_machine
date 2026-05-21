@@ -5,16 +5,16 @@ motor_t motor[num];
 
 /**
 ************************************************************************
-* @brief:      	dm4310_motor_init: DM4310电机初始化函数
+* @brief:      	dm4310_motor_init: DM4310电机初始化函�?
 * @param:      	void
 * @retval:     	void
-* @details:    	初始化1个DM4310型号的电机，设置默认参数和控制模式。
-*               设置ID、控制模式和命令模式等信息。
+* @details:    	初始�?个DM4310型号的电机，设置默认参数和控制模式�?
+*               设置ID、控制模式和命令模式等信息�?
 ************************************************************************
 **/
 void dm_motor_init(void)
 {
-	// 初始化Motor1和Motor2的电机结构
+	// 初始化Motor1和Motor2的电机结�?
 	memset(&motor[Motor1], 0, sizeof(motor[Motor1]));
 	memset(&motor[Motor2], 0, sizeof(motor[Motor2]));
 	memset(&motor[Motor3], 0, sizeof(motor[Motor3]));
@@ -22,7 +22,7 @@ void dm_motor_init(void)
 	memset(&motor[Motor5], 0, sizeof(motor[Motor5]));
 	memset(&motor[Motor6], 0, sizeof(motor[Motor6]));
 
-	// 设置Motor1的电机信息
+	// 设置Motor1的电机信�?
 	motor[Motor1].id = 0x01;
 	motor[Motor1].mst_id = 0x11;	
 	motor[Motor1].tmp.read_flag = 1;
@@ -35,7 +35,7 @@ void dm_motor_init(void)
 	motor[Motor1].tmp.PMAX		= 12.5f;
 	motor[Motor1].tmp.VMAX		= 60.0f;
 	motor[Motor1].tmp.TMAX		= 10.0f;
-// 设置Motor2的电机信息
+// 设置Motor2的电机信�?
 	motor[Motor2].id = 0x02;
 	motor[Motor2].mst_id = 0x12;
 	motor[Motor2].tmp.read_flag = 1;
@@ -77,10 +77,10 @@ void dm_motor_init(void)
 }
 /**
 ************************************************************************
-* @brief:      	read_all_motor_data: 读取电机的所有寄存器的数据信息
+* @brief:      	read_all_motor_data: 读取电机的所有寄存器的数据信�?
 * @param:      	motor_t：电机参数结构体
 * @retval:     	void
-* @details:    	逐次发送读取命令
+* @details:    	逐次发送读取命�?
 ************************************************************************
 **/
 void read_all_motor_data(motor_t *motor)
@@ -136,11 +136,11 @@ void read_all_motor_data(motor_t *motor)
 }
 /**
 ************************************************************************
-* @brief:      	receive_motor_data: 接收电机返回的数据信息
+* @brief:      	receive_motor_data: 接收电机返回的数据信�?
 * @param:      	motor_t：电机参数结构体
 * @param:      	data：接收的数据
 * @retval:     	void
-* @details:    	逐次接收电机回传的参数信息
+* @details:    	逐次接收电机回传的参数信�?
 ************************************************************************
 **/
 void receive_motor_data(motor_t *motor, uint8_t *data)
@@ -214,48 +214,43 @@ void receive_motor_data(motor_t *motor, uint8_t *data)
 * @brief:      	fdcan1_rx_callback: CAN1接收回调函数
 * @param:      	void
 * @retval:     	void
-* @details:    	处理CAN1接收中断回调，根据接收到的ID和数据，执行相应的处理。
-*               当接收到ID为0时，调用dm3519_fbdata函数更新Motor的反馈数据。
+* @details:    	处理CAN1接收中断回调，根据接收到的ID和数据，执行相应的处理�?
+*               当接收到ID�?时，调用dm3519_fbdata函数更新Motor的反馈数据�?
 ************************************************************************
 **/
 void fdcan1_rx_callback(void)
 {
-	uint16_t rec_id;
-	uint8_t rx_data[8] = {0};
-	uint8_t len;
-	len=fdcanx_receive(&hfdcan1, &rec_id, rx_data);
+    uint16_t rec_id;
+    uint8_t rx_data[8] = {0};
+    uint8_t len;
 
-  if(len==8)
-  {
-		switch (rec_id)
-			{
-				case 0x11: 
-				 dm_motor_fbdata(&motor[Motor1], rx_data);
-				 
-				 receive_motor_data(&motor[Motor1], rx_data);
-				 
-				 break;
+    while ((len = fdcanx_receive(&hfdcan1, &rec_id, rx_data)) == 8U)
+    {
+        switch (rec_id)
+        {
+            case 0x11:
+                dm_motor_fbdata(&motor[Motor1], rx_data);
+                receive_motor_data(&motor[Motor1], rx_data);
+                break;
 
-			    case 0x12:
-				 dm_motor_fbdata(&motor[Motor2], rx_data);
-				 receive_motor_data(&motor[Motor2], rx_data);
-				 break;
+            case 0x12:
+                dm_motor_fbdata(&motor[Motor2], rx_data);
+                receive_motor_data(&motor[Motor2], rx_data);
+                break;
 
-			    case 0x13:
-				 dm_motor_fbdata(&motor[Motor3], rx_data);
-				 receive_motor_data(&motor[Motor3], rx_data);
-				 break;
+            case 0x13:
+                dm_motor_fbdata(&motor[Motor3], rx_data);
+                receive_motor_data(&motor[Motor3], rx_data);
+                break;
 
-			    case 0x14:
-				 dm_motor_fbdata(&motor[Motor4], rx_data);
-				 receive_motor_data(&motor[Motor4], rx_data);
-				 break;
+            case 0x14:
+                dm_motor_fbdata(&motor[Motor4], rx_data);
+                receive_motor_data(&motor[Motor4], rx_data);
+                break;
 
-				default: break;// 其他ID的处理
-			}
-
-  }
-	
+            default:
+                break;
+        }
+    }
 }
-
 
