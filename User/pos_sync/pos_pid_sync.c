@@ -30,7 +30,7 @@
 #define POS_PID_SYNC_VEL_KP          0.20f//速度给定环，根据位置误差和当前速度算下发速度
 #define POS_PID_SYNC_VEL_KI          0.0f
 #define POS_PID_SYNC_VEL_KD          0.0f
-#define POS_PID_SYNC_VEL_OUT_MAX     20.0f
+#define POS_PID_SYNC_VEL_OUT_MAX     40.0f
 #define POS_PID_SYNC_VEL_OUT_MIN     0.5f
 #define POS_PID_SYNC_VEL_CMD_RATIO   30.0f
 
