@@ -14,6 +14,7 @@
 #include "pos_sync/pos_pid_sync.h"
 #include "beam_ctrl/beam_ctrl.h"
 #include "lift_ctrl/lift_ctrl.h"
+#include "xy_route/xy_route.h"
 #include "crane_route/crane_route.h"
 #include "tim.h"
 #include "usart.h"

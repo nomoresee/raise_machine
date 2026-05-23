@@ -63,7 +63,7 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 static float pos_target = 200.0f;
-static float pos_vel = 2.1f;
+static float pos_vel = 0.5f;
 static float beam_vel = 1.0f;
 static float lift_vel = 10.5f;
 //static uint32_t vofa_print_tick = 0U;
@@ -192,6 +192,7 @@ int main(void)
   beam_ctrl_set_max_vel(beam_vel);
   lift_ctrl_init(&hfdcan1, Motor4);
   lift_ctrl_set_max_vel(lift_vel);
+  xy_route_init();
   crane_route_init();
   crane_route_start();
 //////舵机初始化定时器
@@ -214,6 +215,7 @@ int main(void)
 
     motor_angle_update_all();
     crane_route_process();
+    xy_route_process();
     pos_pid_sync_process();
     beam_ctrl_process();
     lift_ctrl_process();
