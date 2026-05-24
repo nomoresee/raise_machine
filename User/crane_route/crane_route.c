@@ -3,16 +3,14 @@
 #define CRANE_ROUTE_LEG_COUNT          3U
 
 /*
- * 三趟任务的目标放置点。
+ * 三趟放置目标：
+ * - 第 1 趟固定取 3 号货，放到 CRANE_ROUTE_PLACE_FOR_PICK3。
+ * - 第 1 趟如果放 4/5，后续取货顺序为 1 -> 2。
+ * - 第 1 趟如果放 6/7/8，后续取货顺序为 2 -> 1。
  *
- * 当前路径规划规则：
- * - 第一趟固定取 3 号货。
- * - 如果 3 号货放到 4/5，上侧放完后空载直线回 1，再执行 1 -> 2。
- * - 如果 3 号货放到 6/7/8，下侧放完后空载直线回 2，再执行 2 -> 1。
- *
- * 调试其它表格路线时，优先改下面三个目标点。例如：
- * - 3-4-直线-1-上绕-5-上绕-2-下绕-6-回中：写 4, 5, 6
- * - 3-7-直线-2-下绕-4-直线-1-上绕-5-回中：写 7, 4, 5
+ * 例：
+ * 4,5,6 => 3-4-直线-1-上绕-5-上绕-2-下绕-6-回中
+ * 7,4,5 => 3-7-直线-2-下绕-4-直线-1-上绕-5-回中
  */
 #define CRANE_ROUTE_PLACE_FOR_PICK3     4U
 #define CRANE_ROUTE_PLACE_FOR_SECOND    5U
@@ -25,15 +23,19 @@
 #define CRANE_ROUTE_LIFT_SAFE_POS       12.0f
 #define CRANE_ROUTE_LEG_DWELL_MS        300U
 
+/* Z 从工作低位抬高 2 后，Y 可以提前去绕行入口；X 仍等 Z 到安全位后再跑。 */
+#define CRANE_ROUTE_Y_PREMOVE_DELTA     2.0f
+#define CRANE_ROUTE_Z_GATE_TOL          1.0f
+
 typedef struct
 {
     uint8_t pick_slot;
     uint8_t place_slot;
-    uint8_t next_pick_slot;       /* 下一趟取货位；0 表示三趟完成后回中 */
-    xy_route_type_e go_route;     /* 载货去放置点的路线：直线/上绕/下绕 */
-    xy_route_type_e return_route; /* 放完后空载回下一取货位或回中的路线 */
-    xy_release_mode_e go_release;     /* 载货段 Y 释放时机 */
-    xy_release_mode_e return_release; /* 空载回程段 Y 释放时机 */
+    uint8_t next_pick_slot;           /* 0 表示最后回中 */
+    xy_route_type_e go_route;         /* 载货去放置点：上绕/下绕/直线 */
+    xy_route_type_e return_route;     /* 空载回取货区：上绕/下绕/直线 */
+    xy_release_mode_e go_release;     /* 载货段：入口释放或出口释放 */
+    xy_release_mode_e return_release; /* 回程段：当前绕行回程都按出口释放 */
 } crane_route_leg_t;
 
 static crane_slot_pose_t crane_route_slot_pose[CRANE_ROUTE_SLOT_COUNT + 1U] =
@@ -55,6 +57,7 @@ typedef struct
     crane_route_leg_t leg[CRANE_ROUTE_LEG_COUNT];
     uint8_t leg_index;
     uint8_t current_slot;
+    uint8_t y_prepare_done;
     crane_route_action_e current_action;
     uint32_t dwell_tick;
 } crane_route_t;
@@ -63,14 +66,22 @@ static crane_route_t crane_route;
 
 static uint8_t crane_route_is_upper_place(uint8_t slot)
 {
-    /* 4、5 号放置位按上侧目标处理。 */
     return ((slot == 4U) || (slot == 5U)) ? 1U : 0U;
 }
 
 static uint8_t crane_route_is_lower_place(uint8_t slot)
 {
-    /* 6、7、8 号放置位按下侧目标处理。 */
     return ((slot >= 6U) && (slot <= 8U)) ? 1U : 0U;
+}
+
+static uint8_t crane_route_is_upper_extreme_place(uint8_t slot)
+{
+    return ((slot == 4U) || (slot == 5U)) ? 1U : 0U;
+}
+
+static uint8_t crane_route_is_lower_extreme_place(uint8_t slot)
+{
+    return ((slot == 7U) || (slot == 8U)) ? 1U : 0U;
 }
 
 static uint8_t crane_route_is_valid_place(uint8_t slot)
@@ -83,23 +94,53 @@ static xy_route_type_e crane_route_go_route_for(uint8_t pick_slot, uint8_t place
 {
     if (pick_slot == 3U)
     {
-        /* 3 号在下侧：去 4/5 走下绕上；去 6/7/8 走上绕下。 */
-        return (crane_route_is_upper_place(place_slot) != 0U) ? XY_ROUTE_DOWN : XY_ROUTE_UP;
+        if (crane_route_is_upper_extreme_place(place_slot) != 0U)
+        {
+            return XY_ROUTE_DOWN; /* 3 -> 4/5：下绕，入口释放 */
+        }
+
+        return XY_ROUTE_UP;       /* 3 -> 6/7/8：上绕，其中 6 出口释放 */
     }
 
     if (pick_slot == 1U)
     {
-        /* 1 号出发统一使用上绕模板。 */
         return XY_ROUTE_UP;
     }
 
     if (pick_slot == 2U)
     {
-        /* 2 号出发统一使用下绕模板。 */
         return XY_ROUTE_DOWN;
     }
 
     return XY_ROUTE_DIRECT;
+}
+
+static xy_release_mode_e crane_route_go_release_for(uint8_t pick_slot, uint8_t place_slot)
+{
+    if (pick_slot == 1U)
+    {
+        return (crane_route_is_lower_extreme_place(place_slot) != 0U) ?
+               XY_RELEASE_AFTER_ENTRY : XY_RELEASE_AFTER_EXIT;
+    }
+
+    if (pick_slot == 2U)
+    {
+        return (crane_route_is_upper_extreme_place(place_slot) != 0U) ?
+               XY_RELEASE_AFTER_ENTRY : XY_RELEASE_AFTER_EXIT;
+    }
+
+    if (pick_slot == 3U)
+    {
+        if ((crane_route_is_upper_extreme_place(place_slot) != 0U) ||
+            (crane_route_is_lower_extreme_place(place_slot) != 0U))
+        {
+            return XY_RELEASE_AFTER_ENTRY;
+        }
+
+        return XY_RELEASE_AFTER_EXIT; /* 3 -> 6：上绕，到出口后释放 */
+    }
+
+    return XY_RELEASE_AFTER_EXIT;
 }
 
 static xy_route_type_e crane_route_return_route_for(uint8_t pick_slot,
@@ -113,38 +154,30 @@ static xy_route_type_e crane_route_return_route_for(uint8_t pick_slot,
 
     if (pick_slot == 3U)
     {
-        /* 第一趟放完后，根据首个目标区选择出的下一取货位，空载直线返回。 */
-        return XY_ROUTE_DIRECT;
+        return XY_ROUTE_DIRECT; /* 第一趟放完按首个目标区直线回 1 或 2 */
     }
 
-    if (pick_slot == 1U)
+    if (crane_route_is_upper_extreme_place(place_slot) != 0U)
     {
-        /* 1 放到上侧后去 2：上绕回 2；1 放到下侧后去 2：直线回 2。 */
-        return (crane_route_is_upper_place(place_slot) != 0U) ? XY_ROUTE_UP : XY_ROUTE_DIRECT;
+        return (next_pick_slot == 1U) ? XY_ROUTE_DIRECT : XY_ROUTE_DOWN;
     }
 
-    if (pick_slot == 2U)
+    if (crane_route_is_lower_extreme_place(place_slot) != 0U)
     {
-        /* 2 放到上侧后去 1：直线回 1；2 放到下侧后去 1：下绕回 1。 */
-        return (crane_route_is_upper_place(place_slot) != 0U) ? XY_ROUTE_DIRECT : XY_ROUTE_DOWN;
+        return (next_pick_slot == 2U) ? XY_ROUTE_DIRECT : XY_ROUTE_UP;
+    }
+
+    if (place_slot == 6U)
+    {
+        return (next_pick_slot == 1U) ? XY_ROUTE_UP : XY_ROUTE_DOWN;
     }
 
     return XY_ROUTE_DIRECT;
 }
 
-static xy_release_mode_e crane_route_release_mode_for(uint8_t from_slot, uint8_t to_slot)
+static xy_release_mode_e crane_route_return_release_for(xy_route_type_e return_route)
 {
-    if (((from_slot == 1U) && (crane_route_is_lower_place(to_slot) != 0U)) ||
-        ((from_slot == 2U) && (crane_route_is_upper_place(to_slot) != 0U)) ||
-        ((crane_route_is_upper_place(from_slot) != 0U) && (to_slot == 2U)) ||
-        ((crane_route_is_lower_place(from_slot) != 0U) && (to_slot == 1U)))
-    {
-        /* 对角线优化：过入口后，Y 直接向目标点移动。 */
-        return XY_RELEASE_AFTER_ENTRY;
-    }
-
-    /* 完整通道：X 到出口点后，Y 再离开绕行安全线。 */
-    return XY_RELEASE_AFTER_EXIT;
+    return (return_route == XY_ROUTE_DIRECT) ? XY_RELEASE_AFTER_ENTRY : XY_RELEASE_AFTER_EXIT;
 }
 
 static void crane_route_build_plan(void)
@@ -166,13 +199,11 @@ static void crane_route_build_plan(void)
 
     if (crane_route_is_upper_place(first_place) != 0U)
     {
-        /* 第一趟放 4/5：后续顺序为 3 -> 1 -> 2。 */
         second_pick = 1U;
         third_pick = 2U;
     }
     else
     {
-        /* 第一趟放 6/7/8：后续顺序为 3 -> 2 -> 1。 */
         second_pick = 2U;
         third_pick = 1U;
     }
@@ -199,11 +230,10 @@ static void crane_route_build_plan(void)
                                          crane_route.leg[i].place_slot,
                                          crane_route.leg[i].next_pick_slot);
         crane_route.leg[i].go_release =
-            crane_route_release_mode_for(crane_route.leg[i].pick_slot,
-                                         crane_route.leg[i].place_slot);
+            crane_route_go_release_for(crane_route.leg[i].pick_slot,
+                                       crane_route.leg[i].place_slot);
         crane_route.leg[i].return_release =
-            crane_route_release_mode_for(crane_route.leg[i].place_slot,
-                                         crane_route.leg[i].next_pick_slot);
+            crane_route_return_release_for(crane_route.leg[i].return_route);
     }
 }
 
@@ -266,13 +296,38 @@ static void crane_route_prepare_y_for_slot(uint8_t slot, xy_route_type_e route_t
 #if ((CRANE_ROUTE_CHASSIS_ONLY == 0U) && (CRANE_ROUTE_BEAM_ONLY == 0U))
     if (slot <= CRANE_ROUTE_SLOT_COUNT)
     {
-        /* Z 抬升期间先让 Y 去绕行安全线，等 Z 到位后 X 再启动。 */
         xy_route_prepare_y(route_type, crane_route_slot_pose[slot].beam_pos);
     }
 #else
     (void)slot;
     (void)route_type;
 #endif
+}
+
+static void crane_route_try_prepare_y(uint8_t target_slot, xy_route_type_e route_type)
+{
+    float lift_now;
+    float y_premove_pos;
+
+    if (crane_route.y_prepare_done != 0U)
+    {
+        return;
+    }
+
+    if ((crane_route.current_slot == 0U) || (crane_route.current_slot > CRANE_ROUTE_SLOT_COUNT))
+    {
+        return;
+    }
+
+    lift_now = lift_ctrl_get_current_pos();
+    y_premove_pos = crane_route_slot_pose[crane_route.current_slot].lift_work_pos +
+                    CRANE_ROUTE_Y_PREMOVE_DELTA;
+
+    if (lift_now >= (y_premove_pos - CRANE_ROUTE_Z_GATE_TOL))
+    {
+        crane_route_prepare_y_for_slot(target_slot, route_type);
+        crane_route.y_prepare_done = 1U;
+    }
 }
 
 static void crane_route_stop_xy(void)
@@ -314,6 +369,7 @@ void crane_route_start(void)
     memset(crane_route.leg, 0, sizeof(crane_route.leg));
     crane_route.leg_index = 0U;
     crane_route.current_slot = 0U;
+    crane_route.y_prepare_done = 0U;
     crane_route.current_action = CRANE_ROUTE_ACTION_PICK;
     crane_route.dwell_tick = HAL_GetTick();
     crane_route_stop_xy();
@@ -461,6 +517,8 @@ void crane_route_process(void)
             }
             crane_route.current_slot = leg->pick_slot;
             crane_route.current_action = CRANE_ROUTE_ACTION_PICK;
+            /* 去取货点时，Z 同步抬到该取货点安全高度；XY 不等待 Z，三轴一起抢时间。 */
+            crane_route_move_lift_to(crane_route_slot_pose[leg->pick_slot].lift_safe_pos);
             if (leg->pick_slot == 3U)
             {
                 crane_route_move_xy_to_slot(leg->pick_slot,
@@ -516,14 +574,26 @@ void crane_route_process(void)
                 crane_route.state = CRANE_ROUTE_FINISHED;
                 break;
             }
+            crane_route.y_prepare_done = 0U;
             crane_route_move_lift_to(crane_route_slot_pose[crane_route.current_slot].lift_safe_pos);
-            crane_route_prepare_y_for_slot(leg->place_slot, leg->go_route);
             crane_route.state = CRANE_ROUTE_WAIT_LIFT_UP_AFTER_PICK;
             break;
 
         case CRANE_ROUTE_WAIT_LIFT_UP_AFTER_PICK:
+            leg = crane_route_current_leg();
+            if (leg == NULL)
+            {
+                crane_route.state = CRANE_ROUTE_FINISHED;
+                break;
+            }
+            crane_route_try_prepare_y(leg->place_slot, leg->go_route);
             if (lift_ctrl_is_busy() == 0U)
             {
+                if (crane_route.y_prepare_done == 0U)
+                {
+                    crane_route_prepare_y_for_slot(leg->place_slot, leg->go_route);
+                    crane_route.y_prepare_done = 1U;
+                }
                 crane_route.state = CRANE_ROUTE_MOVE_TO_PLACE;
             }
             break;
@@ -583,15 +653,27 @@ void crane_route_process(void)
                 crane_route.state = CRANE_ROUTE_FINISHED;
                 break;
             }
-            return_slot = leg->next_pick_slot;
+            crane_route.y_prepare_done = 0U;
             crane_route_move_lift_to(crane_route_slot_pose[crane_route.current_slot].lift_safe_pos);
-            crane_route_prepare_y_for_slot(return_slot, leg->return_route);
             crane_route.state = CRANE_ROUTE_WAIT_LIFT_UP_AFTER_PLACE;
             break;
 
         case CRANE_ROUTE_WAIT_LIFT_UP_AFTER_PLACE:
+            leg = crane_route_current_leg();
+            if (leg == NULL)
+            {
+                crane_route.state = CRANE_ROUTE_FINISHED;
+                break;
+            }
+            return_slot = leg->next_pick_slot;
+            crane_route_try_prepare_y(return_slot, leg->return_route);
             if (lift_ctrl_is_busy() == 0U)
             {
+                if (crane_route.y_prepare_done == 0U)
+                {
+                    crane_route_prepare_y_for_slot(return_slot, leg->return_route);
+                    crane_route.y_prepare_done = 1U;
+                }
                 crane_route.state = CRANE_ROUTE_RETURN_AFTER_PLACE;
             }
             break;
