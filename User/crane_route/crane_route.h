@@ -12,6 +12,9 @@
 /* 1：仅横梁按路线槽位 beam_pos 逐点走位，底盘/升降/夹爪不动作；0：整机联动 */
 #define CRANE_ROUTE_BEAM_ONLY       0U
 
+/* 1: run planned route on beam(Y) only; chassis, lift and gripper stay still. */
+#define CRANE_ROUTE_BEAM_PATH_ONLY_DEFAULT  0U
+
 /* 1: chassis-only debug, only run pos_pid_sync along chassis_pos route */
 #define CRANE_ROUTE_CHASSIS_ONLY    0U
 
@@ -59,6 +62,8 @@ void crane_route_init(void);
 void crane_route_start(void);
 void crane_route_stop(void);
 void crane_route_process(void);
+void crane_route_set_beam_path_only(uint8_t enable);
+uint8_t crane_route_get_beam_path_only(void);
 void crane_route_set_slot_pose(uint8_t slot, float chassis_pos, float beam_pos);
 void crane_route_set_slot_lift_pos(uint8_t slot, float lift_work_pos, float lift_safe_pos);
 void crane_route_get_current_target(float *x, float *y);

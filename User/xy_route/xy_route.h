@@ -35,6 +35,9 @@ void xy_route_start(float target_x,
                     float target_y,
                     xy_route_type_e route_type,
                     xy_release_mode_e release_mode);
+void xy_route_start_y_only(float target_y,
+                           xy_route_type_e route_type,
+                           xy_release_mode_e release_mode);
 void xy_route_stop(void);
 void xy_route_process(void);
 uint8_t xy_route_is_busy(void);

@@ -12,23 +12,23 @@
  */
 
 /* X 入口/出口点：+X 侧靠近取货区，-X 侧靠近放置区。 */
-#define XY_ROUTE_X_ENTRY_PICK_SIDE       400.0f
-#define XY_ROUTE_X_ENTRY_PLACE_SIDE     -400.0f
+#define XY_ROUTE_X_ENTRY_PICK_SIDE       780.0f
+#define XY_ROUTE_X_ENTRY_PLACE_SIDE     -500.0f
 
 /* 上绕：入口在 +20，出口在 -20。 */
-#define XY_ROUTE_Y_UP_ENTRY               20.0f
-#define XY_ROUTE_Y_UP_EXIT               -20.0f
+#define XY_ROUTE_Y_UP_ENTRY               8.0f
+#define XY_ROUTE_Y_UP_EXIT               -8.0f
 
 /* 下绕：入口在 -20，出口在 +20。 */
-#define XY_ROUTE_Y_DOWN_ENTRY            -20.0f
-#define XY_ROUTE_Y_DOWN_EXIT              20.0f
+#define XY_ROUTE_Y_DOWN_ENTRY            -8.0f
+#define XY_ROUTE_Y_DOWN_EXIT              8.0f
 
 /* X 到入口前提前多少开始检查 Y，给 X 停车留余量。 */
-#define XY_ROUTE_X_WAIT_MARGIN            50.0f
+#define XY_ROUTE_X_WAIT_MARGIN            25.0f
 
 /* 入口/出口 Y 到位容差。 */
-#define XY_ROUTE_Y_ENTRY_TOL               3.0f
-#define XY_ROUTE_Y_EXIT_TOL                3.0f
+#define XY_ROUTE_Y_ENTRY_TOL               1.0f
+#define XY_ROUTE_Y_EXIT_TOL                1.0f
 
 typedef enum
 {
@@ -51,6 +51,7 @@ typedef struct
     float exit_y;
     int8_t x_dir;
     uint8_t busy;
+    uint8_t y_only;
 } xy_route_t;
 
 static xy_route_t xy_route;
@@ -212,6 +213,7 @@ void xy_route_start(float target_x,
     xy_route.release_mode = release_mode;
     xy_route.x_dir = (target_x >= xy_route.start_x) ? 1 : -1;
     xy_route.busy = 1U;
+    xy_route.y_only = 0U;
 
     if (xy_route_is_bypass(route_type) == 0U)
     {
@@ -227,12 +229,42 @@ void xy_route_start(float target_x,
     xy_route.state = XY_ROUTE_BYPASS_TO_ENTRY;
 }
 
+void xy_route_start_y_only(float target_y,
+                           xy_route_type_e route_type,
+                           xy_release_mode_e release_mode)
+{
+    xy_route.start_y = beam_ctrl_get_current_pos();
+    xy_route.target_x = pos_pid_sync_get_current_pos();
+    xy_route.target_y = target_y;
+    xy_route.route_type = route_type;
+    xy_route.release_mode = release_mode;
+    xy_route.busy = 1U;
+    xy_route.y_only = 1U;
+
+    xy_route.entry_y = xy_route_entry_y_for(route_type, target_y);
+    xy_route.exit_y = xy_route_exit_y_for(route_type, target_y);
+
+    if (xy_route_is_bypass(route_type) == 0U)
+    {
+        xy_route_run_y_to(target_y);
+        xy_route.state = XY_ROUTE_DIRECT_RUN;
+        return;
+    }
+
+    xy_route_run_y_to(xy_route.entry_y);
+    xy_route.state = XY_ROUTE_BYPASS_WAIT_ENTRY_Y;
+}
+
 void xy_route_stop(void)
 {
     xy_route.state = XY_ROUTE_IDLE;
     xy_route.busy = 0U;
-    pos_pid_sync_stop();
+    if (xy_route.y_only == 0U)
+    {
+        pos_pid_sync_stop();
+    }
     beam_ctrl_stop();
+    xy_route.y_only = 0U;
 }
 
 void xy_route_process(void)
@@ -244,7 +276,8 @@ void xy_route_process(void)
             break;
 
         case XY_ROUTE_DIRECT_RUN:
-            if ((pos_pid_sync_is_busy() == 0U) && (beam_ctrl_is_busy() == 0U))
+            if (((xy_route.y_only != 0U) || (pos_pid_sync_is_busy() == 0U)) &&
+                (beam_ctrl_is_busy() == 0U))
             {
                 xy_route.busy = 0U;
                 xy_route.state = XY_ROUTE_DONE;
@@ -278,7 +311,10 @@ void xy_route_process(void)
         case XY_ROUTE_BYPASS_WAIT_ENTRY_Y:
             if (xy_route_y_at_entry() != 0U)
             {
-                xy_route_run_x_to_target();
+                if (xy_route.y_only == 0U)
+                {
+                    xy_route_run_x_to_target();
+                }
 
                 if (xy_route.release_mode == XY_RELEASE_AFTER_ENTRY)
                 {
@@ -288,7 +324,9 @@ void xy_route_process(void)
                 else
                 {
                     xy_route_run_y_to(xy_route.exit_y);
-                    xy_route.state = XY_ROUTE_BYPASS_TO_EXIT;
+                    xy_route.state = (xy_route.y_only != 0U) ?
+                                     XY_ROUTE_BYPASS_WAIT_EXIT_Y :
+                                     XY_ROUTE_BYPASS_TO_EXIT;
                 }
             }
             break;
@@ -312,14 +350,18 @@ void xy_route_process(void)
         case XY_ROUTE_BYPASS_WAIT_EXIT_Y:
             if (xy_route_y_at_exit() != 0U)
             {
-                xy_route_run_x_to_target();
+                if (xy_route.y_only == 0U)
+                {
+                    xy_route_run_x_to_target();
+                }
                 xy_route_run_y_to(xy_route.target_y);
                 xy_route.state = XY_ROUTE_BYPASS_TO_TARGET;
             }
             break;
 
         case XY_ROUTE_BYPASS_TO_TARGET:
-            if ((pos_pid_sync_is_busy() == 0U) && (beam_ctrl_is_busy() == 0U))
+            if (((xy_route.y_only != 0U) || (pos_pid_sync_is_busy() == 0U)) &&
+                (beam_ctrl_is_busy() == 0U))
             {
                 xy_route.busy = 0U;
                 xy_route.state = XY_ROUTE_DONE;

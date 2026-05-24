@@ -24,7 +24,7 @@
 #define CRANE_ROUTE_LEG_DWELL_MS        300U
 
 /* Z 从工作低位抬高 2 后，Y 可以提前去绕行入口；X 仍等 Z 到安全位后再跑。 */
-#define CRANE_ROUTE_Y_PREMOVE_DELTA     2.0f
+#define CRANE_ROUTE_Y_PREMOVE_DELTA     2.5f
 #define CRANE_ROUTE_Z_GATE_TOL          1.0f
 
 typedef struct
@@ -41,14 +41,15 @@ typedef struct
 static crane_slot_pose_t crane_route_slot_pose[CRANE_ROUTE_SLOT_COUNT + 1U] =
 {
     {0.0f, 0.0f, 0.0f, 0.0f}, /* 0 号：中心/回零点 */
-    {600.0f, 30.0f, CRANE_ROUTE_LIFT_PICK_1_POS, CRANE_ROUTE_LIFT_SAFE_POS},
-    {600.0f, 0.0f, CRANE_ROUTE_LIFT_PICK_2_POS, CRANE_ROUTE_LIFT_SAFE_POS},
-    {650.0f, -40.0f, CRANE_ROUTE_LIFT_PICK_3_POS, CRANE_ROUTE_LIFT_SAFE_POS},
-    {-700.0f, 65.0f, CRANE_ROUTE_LIFT_PLACE_POS, CRANE_ROUTE_LIFT_SAFE_POS},
-    {-700.0f, 38.0f, CRANE_ROUTE_LIFT_PLACE_POS, CRANE_ROUTE_LIFT_SAFE_POS},
-    {-700.0f, 2.8f, CRANE_ROUTE_LIFT_PLACE_POS, CRANE_ROUTE_LIFT_SAFE_POS},
-    {-700.0f, -32.0f, CRANE_ROUTE_LIFT_PLACE_POS, CRANE_ROUTE_LIFT_SAFE_POS},
-    {-700.0f, -67.0f, CRANE_ROUTE_LIFT_PLACE_POS, CRANE_ROUTE_LIFT_SAFE_POS},
+    {1100.0f, 15.0f, CRANE_ROUTE_LIFT_PICK_1_POS, CRANE_ROUTE_LIFT_SAFE_POS},//1
+    {1100.0f, -15.0f, CRANE_ROUTE_LIFT_PICK_2_POS, CRANE_ROUTE_LIFT_SAFE_POS},//2
+    {1100.0f, 0.0f, CRANE_ROUTE_LIFT_PICK_3_POS, CRANE_ROUTE_LIFT_SAFE_POS},//3
+
+    {-850.0f, 25.0f, CRANE_ROUTE_LIFT_PLACE_POS, CRANE_ROUTE_LIFT_SAFE_POS},//4
+    {-850.0f, 10.0f, CRANE_ROUTE_LIFT_PLACE_POS, CRANE_ROUTE_LIFT_SAFE_POS},//5
+    {-850.0f, 2.0f, CRANE_ROUTE_LIFT_PLACE_POS, CRANE_ROUTE_LIFT_SAFE_POS},//6
+    {-850.0f, -10.0f, CRANE_ROUTE_LIFT_PLACE_POS, CRANE_ROUTE_LIFT_SAFE_POS},//7
+    {-850.0f, -23.0f, CRANE_ROUTE_LIFT_PLACE_POS, CRANE_ROUTE_LIFT_SAFE_POS},//8
 };
 
 typedef struct
@@ -58,11 +59,17 @@ typedef struct
     uint8_t leg_index;
     uint8_t current_slot;
     uint8_t y_prepare_done;
+    uint8_t beam_path_only;
     crane_route_action_e current_action;
     uint32_t dwell_tick;
 } crane_route_t;
 
 static crane_route_t crane_route;
+
+static uint8_t crane_route_is_beam_path_only(void)
+{
+    return (crane_route.beam_path_only != 0U) ? 1U : 0U;
+}
 
 static uint8_t crane_route_is_upper_place(uint8_t slot)
 {
@@ -249,8 +256,24 @@ static crane_route_leg_t *crane_route_current_leg(void)
 
 static void crane_route_move_lift_to(float target_pos)
 {
+    if (crane_route_is_beam_path_only() != 0U)
+    {
+        (void)target_pos;
+        return;
+    }
+
     lift_ctrl_set_target(target_pos);
     lift_ctrl_start();
+}
+
+static uint8_t crane_route_lift_is_busy(void)
+{
+    if (crane_route_is_beam_path_only() != 0U)
+    {
+        return 0U;
+    }
+
+    return lift_ctrl_is_busy();
 }
 
 static void crane_route_move_xy_to_slot(uint8_t slot,
@@ -273,10 +296,19 @@ static void crane_route_move_xy_to_slot(uint8_t slot,
     beam_ctrl_set_target(crane_route_slot_pose[slot].beam_pos);
     beam_ctrl_start();
 #else
-    xy_route_start(crane_route_slot_pose[slot].chassis_pos,
-                   crane_route_slot_pose[slot].beam_pos,
-                   route_type,
-                   release_mode);
+    if (crane_route_is_beam_path_only() != 0U)
+    {
+        xy_route_start_y_only(crane_route_slot_pose[slot].beam_pos,
+                              route_type,
+                              release_mode);
+    }
+    else
+    {
+        xy_route_start(crane_route_slot_pose[slot].chassis_pos,
+                       crane_route_slot_pose[slot].beam_pos,
+                       route_type,
+                       release_mode);
+    }
 #endif
 }
 
@@ -294,7 +326,7 @@ static uint8_t crane_route_xy_is_busy(void)
 static void crane_route_prepare_y_for_slot(uint8_t slot, xy_route_type_e route_type)
 {
 #if ((CRANE_ROUTE_CHASSIS_ONLY == 0U) && (CRANE_ROUTE_BEAM_ONLY == 0U))
-    if (slot <= CRANE_ROUTE_SLOT_COUNT)
+    if ((crane_route_is_beam_path_only() == 0U) && (slot <= CRANE_ROUTE_SLOT_COUNT))
     {
         xy_route_prepare_y(route_type, crane_route_slot_pose[slot].beam_pos);
     }
@@ -343,6 +375,12 @@ static void crane_route_stop_xy(void)
 
 static void crane_route_set_gripper(crane_route_action_e action)
 {
+    if (crane_route_is_beam_path_only() != 0U)
+    {
+        (void)action;
+        return;
+    }
+
 #if (CRANE_ROUTE_USE_SERVO != 0U)
     if (action == CRANE_ROUTE_ACTION_PICK)
     {
@@ -361,6 +399,7 @@ void crane_route_init(void)
 {
     memset(&crane_route, 0, sizeof(crane_route));
     crane_route.state = CRANE_ROUTE_IDLE;
+    crane_route.beam_path_only = CRANE_ROUTE_BEAM_PATH_ONLY_DEFAULT;
     crane_route.current_action = CRANE_ROUTE_ACTION_PICK;
 }
 
@@ -382,6 +421,16 @@ void crane_route_stop(void)
     crane_route.state = CRANE_ROUTE_IDLE;
     crane_route_stop_xy();
     lift_ctrl_stop();
+}
+
+void crane_route_set_beam_path_only(uint8_t enable)
+{
+    crane_route.beam_path_only = (enable != 0U) ? 1U : 0U;
+}
+
+uint8_t crane_route_get_beam_path_only(void)
+{
+    return crane_route_is_beam_path_only();
 }
 
 void crane_route_set_slot_pose(uint8_t slot, float chassis_pos, float beam_pos)
@@ -547,7 +596,7 @@ void crane_route_process(void)
             break;
 
         case CRANE_ROUTE_WAIT_LIFT_DOWN_PICK:
-            if (lift_ctrl_is_busy() == 0U)
+            if (crane_route_lift_is_busy() == 0U)
             {
                 crane_route.state = CRANE_ROUTE_GRIPPER_PICK;
             }
@@ -561,7 +610,8 @@ void crane_route_process(void)
             break;
 
         case CRANE_ROUTE_GRIPPER_PICK_HOLD:
-            if ((HAL_GetTick() - crane_route.dwell_tick) >= CRANE_ROUTE_PICK_DWELL_MS)
+            if ((crane_route_is_beam_path_only() != 0U) ||
+                ((HAL_GetTick() - crane_route.dwell_tick) >= CRANE_ROUTE_PICK_DWELL_MS))
             {
                 crane_route.state = CRANE_ROUTE_LIFT_UP_AFTER_PICK;
             }
@@ -587,7 +637,7 @@ void crane_route_process(void)
                 break;
             }
             crane_route_try_prepare_y(leg->place_slot, leg->go_route);
-            if (lift_ctrl_is_busy() == 0U)
+            if (crane_route_lift_is_busy() == 0U)
             {
                 if (crane_route.y_prepare_done == 0U)
                 {
@@ -626,7 +676,7 @@ void crane_route_process(void)
             break;
 
         case CRANE_ROUTE_WAIT_LIFT_DOWN_PLACE:
-            if (lift_ctrl_is_busy() == 0U)
+            if (crane_route_lift_is_busy() == 0U)
             {
                 crane_route.state = CRANE_ROUTE_GRIPPER_PLACE;
             }
@@ -640,7 +690,8 @@ void crane_route_process(void)
             break;
 
         case CRANE_ROUTE_GRIPPER_PLACE_HOLD:
-            if ((HAL_GetTick() - crane_route.dwell_tick) >= CRANE_ROUTE_PICK_DWELL_MS)
+            if ((crane_route_is_beam_path_only() != 0U) ||
+                ((HAL_GetTick() - crane_route.dwell_tick) >= CRANE_ROUTE_PICK_DWELL_MS))
             {
                 crane_route.state = CRANE_ROUTE_LIFT_UP_AFTER_PLACE;
             }
@@ -667,7 +718,7 @@ void crane_route_process(void)
             }
             return_slot = leg->next_pick_slot;
             crane_route_try_prepare_y(return_slot, leg->return_route);
-            if (lift_ctrl_is_busy() == 0U)
+            if (crane_route_lift_is_busy() == 0U)
             {
                 if (crane_route.y_prepare_done == 0U)
                 {
