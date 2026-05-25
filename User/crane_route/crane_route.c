@@ -156,7 +156,7 @@ static xy_route_type_e crane_route_return_route_for(uint8_t pick_slot,
 {
     if (next_pick_slot == 0U)
     {
-        return XY_ROUTE_CENTER;
+        return (place_slot <= 6U) ? XY_ROUTE_CENTER_DOWN_EXIT : XY_ROUTE_CENTER_UP_EXIT;
     }
 
     if (pick_slot == 3U)
@@ -184,6 +184,11 @@ static xy_route_type_e crane_route_return_route_for(uint8_t pick_slot,
 
 static xy_release_mode_e crane_route_return_release_for(xy_route_type_e return_route)
 {
+    if ((return_route == XY_ROUTE_UP) || (return_route == XY_ROUTE_DOWN))
+    {
+        return XY_RELEASE_AFTER_ENTRY;
+    }
+
     return (return_route == XY_ROUTE_DIRECT) ? XY_RELEASE_AFTER_ENTRY : XY_RELEASE_AFTER_EXIT;
 }
 
@@ -328,7 +333,9 @@ static void crane_route_prepare_y_for_slot(uint8_t slot, xy_route_type_e route_t
 #if ((CRANE_ROUTE_CHASSIS_ONLY == 0U) && (CRANE_ROUTE_BEAM_ONLY == 0U))
     if ((crane_route_is_beam_path_only() == 0U) && (slot <= CRANE_ROUTE_SLOT_COUNT))
     {
-        xy_route_prepare_y(route_type, crane_route_slot_pose[slot].beam_pos);
+        xy_route_prepare_y(crane_route_slot_pose[slot].chassis_pos,
+                           route_type,
+                           crane_route_slot_pose[slot].beam_pos);
     }
 #else
     (void)slot;

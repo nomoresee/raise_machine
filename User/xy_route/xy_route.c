@@ -27,8 +27,8 @@
 #define XY_ROUTE_X_WAIT_MARGIN            25.0f
 
 /* 入口/出口 Y 到位容差。 */
-#define XY_ROUTE_Y_ENTRY_TOL               1.0f
-#define XY_ROUTE_Y_EXIT_TOL                1.0f
+#define XY_ROUTE_Y_ENTRY_TOL               2.0f
+#define XY_ROUTE_Y_EXIT_TOL                2.0f
 
 typedef enum
 {
@@ -66,6 +66,12 @@ static uint8_t xy_route_is_bypass(xy_route_type_e route_type)
     return ((route_type == XY_ROUTE_UP) || (route_type == XY_ROUTE_DOWN)) ? 1U : 0U;
 }
 
+static uint8_t xy_route_is_center_bypass(xy_route_type_e route_type)
+{
+    return ((route_type == XY_ROUTE_CENTER_UP_EXIT) ||
+            (route_type == XY_ROUTE_CENTER_DOWN_EXIT)) ? 1U : 0U;
+}
+
 static xy_route_side_e xy_route_side_from_x(float x, float target_x)
 {
     if (x >= XY_ROUTE_X_ENTRY_PICK_SIDE)
@@ -91,6 +97,23 @@ static xy_route_side_e xy_route_other_side(xy_route_side_e side)
     return (side == XY_ROUTE_SIDE_PICK) ? XY_ROUTE_SIDE_PLACE : XY_ROUTE_SIDE_PICK;
 }
 
+static float xy_route_gate_y_for_side(xy_route_type_e route_type,
+                                      xy_route_side_e side,
+                                      float final_y)
+{
+    if (route_type == XY_ROUTE_UP)
+    {
+        return (side == XY_ROUTE_SIDE_PICK) ? XY_ROUTE_Y_UP_ENTRY : XY_ROUTE_Y_UP_EXIT;
+    }
+
+    if (route_type == XY_ROUTE_DOWN)
+    {
+        return (side == XY_ROUTE_SIDE_PICK) ? XY_ROUTE_Y_DOWN_ENTRY : XY_ROUTE_Y_DOWN_EXIT;
+    }
+
+    return final_y;
+}
+
 static float xy_route_entry_y_for(xy_route_type_e route_type, float final_y)
 {
     if (route_type == XY_ROUTE_UP)
@@ -101,6 +124,16 @@ static float xy_route_entry_y_for(xy_route_type_e route_type, float final_y)
     if (route_type == XY_ROUTE_DOWN)
     {
         return XY_ROUTE_Y_DOWN_ENTRY;
+    }
+
+    if (route_type == XY_ROUTE_CENTER_UP_EXIT)
+    {
+        return XY_ROUTE_Y_UP_EXIT;
+    }
+
+    if (route_type == XY_ROUTE_CENTER_DOWN_EXIT)
+    {
+        return XY_ROUTE_Y_DOWN_EXIT;
     }
 
     return final_y;
@@ -118,6 +151,16 @@ static float xy_route_exit_y_for(xy_route_type_e route_type, float final_y)
         return XY_ROUTE_Y_DOWN_EXIT;
     }
 
+    if (route_type == XY_ROUTE_CENTER_UP_EXIT)
+    {
+        return XY_ROUTE_Y_UP_EXIT;
+    }
+
+    if (route_type == XY_ROUTE_CENTER_DOWN_EXIT)
+    {
+        return XY_ROUTE_Y_DOWN_EXIT;
+    }
+
     return final_y;
 }
 
@@ -129,8 +172,8 @@ static void xy_route_config_gate(float target_x, float target_y, xy_route_type_e
 
     xy_route.entry_x = xy_route_x_for_side(entry_side);
     xy_route.exit_x = xy_route_x_for_side(exit_side);
-    xy_route.entry_y = xy_route_entry_y_for(route_type, target_y);
-    xy_route.exit_y = xy_route_exit_y_for(route_type, target_y);
+    xy_route.entry_y = xy_route_gate_y_for_side(route_type, entry_side, target_y);
+    xy_route.exit_y = xy_route_gate_y_for_side(route_type, exit_side, target_y);
 }
 
 static uint8_t xy_route_y_at_entry(void)
@@ -169,6 +212,11 @@ static uint8_t xy_route_x_at_exit(void)
     return (x_now <= xy_route.exit_x) ? 1U : 0U;
 }
 
+static uint8_t xy_route_x_past_exit(void)
+{
+    return xy_route_x_at_exit();
+}
+
 static void xy_route_hold_x_at_current(void)
 {
     float x_now = pos_pid_sync_get_current_pos();
@@ -194,9 +242,17 @@ void xy_route_init(void)
     xy_route.state = XY_ROUTE_IDLE;
 }
 
-void xy_route_prepare_y(xy_route_type_e route_type, float final_y)
+void xy_route_prepare_y(float target_x, xy_route_type_e route_type, float final_y)
 {
-    float y_target = xy_route_entry_y_for(route_type, final_y);
+    float start_x = pos_pid_sync_get_current_pos();
+    xy_route_side_e entry_side = xy_route_side_from_x(start_x, target_x);
+    float y_target = xy_route_gate_y_for_side(route_type, entry_side, final_y);
+
+    if (xy_route_is_center_bypass(route_type) != 0U)
+    {
+        y_target = xy_route_exit_y_for(route_type, final_y);
+    }
+
     xy_route_run_y_to(y_target);
 }
 
@@ -214,6 +270,16 @@ void xy_route_start(float target_x,
     xy_route.x_dir = (target_x >= xy_route.start_x) ? 1 : -1;
     xy_route.busy = 1U;
     xy_route.y_only = 0U;
+
+    if (xy_route_is_center_bypass(route_type) != 0U)
+    {
+        xy_route.exit_x = xy_route_x_for_side(xy_route_side_from_x(xy_route.start_x, target_x));
+        xy_route.exit_y = xy_route_exit_y_for(route_type, target_y);
+        xy_route_run_y_to(xy_route.exit_y);
+        xy_route_run_x_to_target();
+        xy_route.state = XY_ROUTE_CENTER_TO_EXIT;
+        return;
+    }
 
     if (xy_route_is_bypass(route_type) == 0U)
     {
@@ -243,6 +309,13 @@ void xy_route_start_y_only(float target_y,
 
     xy_route.entry_y = xy_route_entry_y_for(route_type, target_y);
     xy_route.exit_y = xy_route_exit_y_for(route_type, target_y);
+
+    if (xy_route_is_center_bypass(route_type) != 0U)
+    {
+        xy_route_run_y_to(xy_route.exit_y);
+        xy_route.state = XY_ROUTE_CENTER_WAIT_EXIT_Y;
+        return;
+    }
 
     if (xy_route_is_bypass(route_type) == 0U)
     {
@@ -360,6 +433,43 @@ void xy_route_process(void)
             break;
 
         case XY_ROUTE_BYPASS_TO_TARGET:
+            if (((xy_route.y_only != 0U) || (pos_pid_sync_is_busy() == 0U)) &&
+                (beam_ctrl_is_busy() == 0U))
+            {
+                xy_route.busy = 0U;
+                xy_route.state = XY_ROUTE_DONE;
+            }
+            break;
+
+        case XY_ROUTE_CENTER_TO_EXIT:
+            if (xy_route_x_past_exit() != 0U)
+            {
+                if (xy_route_y_at_exit() != 0U)
+                {
+                    xy_route_run_y_to(xy_route.target_y);
+                    xy_route.state = XY_ROUTE_CENTER_TO_TARGET;
+                }
+                else
+                {
+                    xy_route_hold_x_at_current();
+                    xy_route.state = XY_ROUTE_CENTER_WAIT_EXIT_Y;
+                }
+            }
+            break;
+
+        case XY_ROUTE_CENTER_WAIT_EXIT_Y:
+            if (xy_route_y_at_exit() != 0U)
+            {
+                if (xy_route.y_only == 0U)
+                {
+                    xy_route_run_x_to_target();
+                }
+                xy_route_run_y_to(xy_route.target_y);
+                xy_route.state = XY_ROUTE_CENTER_TO_TARGET;
+            }
+            break;
+
+        case XY_ROUTE_CENTER_TO_TARGET:
             if (((xy_route.y_only != 0U) || (pos_pid_sync_is_busy() == 0U)) &&
                 (beam_ctrl_is_busy() == 0U))
             {
