@@ -60,6 +60,7 @@ typedef struct
     uint8_t current_slot;
     uint8_t y_prepare_done;
     uint8_t beam_path_only;
+    uint8_t extreme_return_slot;
     crane_route_action_e current_action;
     uint32_t dwell_tick;
 } crane_route_t;
@@ -281,6 +282,56 @@ static uint8_t crane_route_lift_is_busy(void)
     return lift_ctrl_is_busy();
 }
 
+static void crane_route_config_servo3_for_xy(uint8_t slot,
+                                             xy_route_type_e route_type,
+                                             xy_release_mode_e release_mode)
+{
+    float target_angle = servo3_path_angle_for_slot(slot);
+    uint8_t entry_enable = 0U;
+    uint8_t exit_enable = 0U;
+
+    if (crane_route_is_beam_path_only() != 0U)
+    {
+        return;
+    }
+
+    if ((route_type == XY_ROUTE_UP) || (route_type == XY_ROUTE_DOWN))
+    {
+        if (release_mode == XY_RELEASE_AFTER_ENTRY)
+        {
+            entry_enable = 1U;
+        }
+        else
+        {
+            exit_enable = 1U;
+        }
+    }
+    else if ((route_type == XY_ROUTE_CENTER_UP_EXIT) ||
+             (route_type == XY_ROUTE_CENTER_DOWN_EXIT))
+    {
+        exit_enable = 1U;
+    }
+    else
+    {
+        servo3_path_release_angle(target_angle);
+    }
+
+    xy_route_set_servo3_triggers(entry_enable, target_angle,
+                                 exit_enable, target_angle);
+
+    if ((crane_route.current_action == CRANE_ROUTE_ACTION_PLACE) &&
+        (servo3_path_is_extreme_slot(slot) != 0U))
+    {
+        xy_route_set_servo3_target_wait(1U,
+                                        servo3_path_safe_y_for_slot(slot),
+                                        target_angle);
+    }
+    else
+    {
+        xy_route_set_servo3_target_wait(0U, 0.0f, target_angle);
+    }
+}
+
 static void crane_route_move_xy_to_slot(uint8_t slot,
                                         xy_route_type_e route_type,
                                         xy_release_mode_e release_mode)
@@ -301,6 +352,8 @@ static void crane_route_move_xy_to_slot(uint8_t slot,
     beam_ctrl_set_target(crane_route_slot_pose[slot].beam_pos);
     beam_ctrl_start();
 #else
+    crane_route_config_servo3_for_xy(slot, route_type, release_mode);
+
     if (crane_route_is_beam_path_only() != 0U)
     {
         xy_route_start_y_only(crane_route_slot_pose[slot].beam_pos,
@@ -416,6 +469,7 @@ void crane_route_start(void)
     crane_route.leg_index = 0U;
     crane_route.current_slot = 0U;
     crane_route.y_prepare_done = 0U;
+    crane_route.extreme_return_slot = 0U;
     crane_route.current_action = CRANE_ROUTE_ACTION_PICK;
     crane_route.dwell_tick = HAL_GetTick();
     crane_route_stop_xy();
@@ -724,14 +778,58 @@ void crane_route_process(void)
                 break;
             }
             return_slot = leg->next_pick_slot;
-            crane_route_try_prepare_y(return_slot, leg->return_route);
+            if (servo3_path_is_extreme_slot(leg->place_slot) == 0U)
+            {
+                crane_route_try_prepare_y(return_slot, leg->return_route);
+            }
             if (crane_route_lift_is_busy() == 0U)
             {
-                if (crane_route.y_prepare_done == 0U)
+                if ((crane_route.y_prepare_done == 0U) &&
+                    (servo3_path_is_extreme_slot(leg->place_slot) == 0U))
                 {
                     crane_route_prepare_y_for_slot(return_slot, leg->return_route);
                     crane_route.y_prepare_done = 1U;
                 }
+                if (servo3_path_is_extreme_slot(leg->place_slot) != 0U)
+                {
+                    crane_route.extreme_return_slot = leg->place_slot;
+                    crane_route.state = CRANE_ROUTE_MOVE_EXTREME_SAFE_Y;
+                }
+                else
+                {
+                    crane_route.state = CRANE_ROUTE_RETURN_AFTER_PLACE;
+                }
+            }
+            break;
+
+        case CRANE_ROUTE_MOVE_EXTREME_SAFE_Y:
+            if (crane_route_is_beam_path_only() != 0U)
+            {
+                crane_route.state = CRANE_ROUTE_SERVO_RETURN_PICK;
+                break;
+            }
+            beam_ctrl_set_target(servo3_path_safe_y_for_slot(crane_route.extreme_return_slot));
+            beam_ctrl_start();
+            crane_route.state = CRANE_ROUTE_WAIT_EXTREME_SAFE_Y;
+            break;
+
+        case CRANE_ROUTE_WAIT_EXTREME_SAFE_Y:
+            if ((crane_route_is_beam_path_only() != 0U) ||
+                (beam_ctrl_is_busy() == 0U))
+            {
+                crane_route.state = CRANE_ROUTE_SERVO_RETURN_PICK;
+            }
+            break;
+
+        case CRANE_ROUTE_SERVO_RETURN_PICK:
+            servo3_path_release_pick_area();
+            crane_route.state = CRANE_ROUTE_WAIT_SERVO_RETURN_PICK;
+            break;
+
+        case CRANE_ROUTE_WAIT_SERVO_RETURN_PICK:
+            if (servo3_path_is_arrived() != 0U)
+            {
+                crane_route.extreme_return_slot = 0U;
                 crane_route.state = CRANE_ROUTE_RETURN_AFTER_PLACE;
             }
             break;

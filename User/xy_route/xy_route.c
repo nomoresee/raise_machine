@@ -52,9 +52,32 @@ typedef struct
     int8_t x_dir;
     uint8_t busy;
     uint8_t y_only;
+    uint8_t servo3_entry_enable;
+    uint8_t servo3_exit_enable;
+    uint8_t servo3_entry_done;
+    uint8_t servo3_exit_done;
+    uint8_t servo3_wait_enable;
+    uint8_t servo3_wait_done;
+    xy_route_state_e servo3_wait_next_state;
+    float servo3_entry_angle_deg;
+    float servo3_exit_angle_deg;
+    float servo3_wait_y;
+    float servo3_wait_angle_deg;
 } xy_route_t;
 
+typedef struct
+{
+    uint8_t entry_enable;
+    uint8_t exit_enable;
+    uint8_t wait_enable;
+    float entry_angle_deg;
+    float exit_angle_deg;
+    float wait_y;
+    float wait_angle_deg;
+} xy_route_servo3_pending_t;
+
 static xy_route_t xy_route;
+static xy_route_servo3_pending_t xy_route_servo3_pending;
 
 static float xy_route_absf(float value)
 {
@@ -236,10 +259,75 @@ static void xy_route_run_y_to(float target_y)
     beam_ctrl_start();
 }
 
+static void xy_route_load_servo3_pending(void)
+{
+    xy_route.servo3_entry_enable = xy_route_servo3_pending.entry_enable;
+    xy_route.servo3_exit_enable = xy_route_servo3_pending.exit_enable;
+    xy_route.servo3_wait_enable = xy_route_servo3_pending.wait_enable;
+    xy_route.servo3_entry_angle_deg = xy_route_servo3_pending.entry_angle_deg;
+    xy_route.servo3_exit_angle_deg = xy_route_servo3_pending.exit_angle_deg;
+    xy_route.servo3_wait_y = xy_route_servo3_pending.wait_y;
+    xy_route.servo3_wait_angle_deg = xy_route_servo3_pending.wait_angle_deg;
+    xy_route.servo3_entry_done = 0U;
+    xy_route.servo3_exit_done = 0U;
+    xy_route.servo3_wait_done = 0U;
+    xy_route.servo3_wait_next_state = XY_ROUTE_DONE;
+    memset(&xy_route_servo3_pending, 0, sizeof(xy_route_servo3_pending));
+}
+
+static void xy_route_trigger_servo3_entry(void)
+{
+    if ((xy_route.servo3_entry_enable != 0U) && (xy_route.servo3_entry_done == 0U))
+    {
+        servo3_path_release_angle(xy_route.servo3_entry_angle_deg);
+        xy_route.servo3_entry_done = 1U;
+    }
+}
+
+static void xy_route_trigger_servo3_exit(void)
+{
+    if ((xy_route.servo3_exit_enable != 0U) && (xy_route.servo3_exit_done == 0U))
+    {
+        servo3_path_release_angle(xy_route.servo3_exit_angle_deg);
+        xy_route.servo3_exit_done = 1U;
+    }
+}
+
+static void xy_route_run_final_y_or_wait(xy_route_state_e next_state)
+{
+    if ((xy_route.servo3_wait_enable != 0U) && (xy_route.servo3_wait_done == 0U))
+    {
+        xy_route_run_y_to(xy_route.servo3_wait_y);
+        xy_route.servo3_wait_next_state = next_state;
+        xy_route.state = XY_ROUTE_SERVO_WAIT_SLOT;
+        return;
+    }
+
+    xy_route_run_y_to(xy_route.target_y);
+    xy_route.state = next_state;
+}
+
 void xy_route_init(void)
 {
     memset(&xy_route, 0, sizeof(xy_route));
+    memset(&xy_route_servo3_pending, 0, sizeof(xy_route_servo3_pending));
     xy_route.state = XY_ROUTE_IDLE;
+}
+
+void xy_route_set_servo3_triggers(uint8_t entry_enable, float entry_angle_deg,
+                                  uint8_t exit_enable, float exit_angle_deg)
+{
+    xy_route_servo3_pending.entry_enable = (entry_enable != 0U) ? 1U : 0U;
+    xy_route_servo3_pending.exit_enable = (exit_enable != 0U) ? 1U : 0U;
+    xy_route_servo3_pending.entry_angle_deg = entry_angle_deg;
+    xy_route_servo3_pending.exit_angle_deg = exit_angle_deg;
+}
+
+void xy_route_set_servo3_target_wait(uint8_t enable, float wait_y, float angle_deg)
+{
+    xy_route_servo3_pending.wait_enable = (enable != 0U) ? 1U : 0U;
+    xy_route_servo3_pending.wait_y = wait_y;
+    xy_route_servo3_pending.wait_angle_deg = angle_deg;
 }
 
 void xy_route_prepare_y(float target_x, xy_route_type_e route_type, float final_y)
@@ -270,6 +358,7 @@ void xy_route_start(float target_x,
     xy_route.x_dir = (target_x >= xy_route.start_x) ? 1 : -1;
     xy_route.busy = 1U;
     xy_route.y_only = 0U;
+    xy_route_load_servo3_pending();
 
     if (xy_route_is_center_bypass(route_type) != 0U)
     {
@@ -284,8 +373,7 @@ void xy_route_start(float target_x,
     if (xy_route_is_bypass(route_type) == 0U)
     {
         xy_route_run_x_to_target();
-        xy_route_run_y_to(target_y);
-        xy_route.state = XY_ROUTE_DIRECT_RUN;
+        xy_route_run_final_y_or_wait(XY_ROUTE_DIRECT_RUN);
         return;
     }
 
@@ -306,6 +394,7 @@ void xy_route_start_y_only(float target_y,
     xy_route.release_mode = release_mode;
     xy_route.busy = 1U;
     xy_route.y_only = 1U;
+    xy_route_load_servo3_pending();
 
     xy_route.entry_y = xy_route_entry_y_for(route_type, target_y);
     xy_route.exit_y = xy_route_exit_y_for(route_type, target_y);
@@ -319,8 +408,7 @@ void xy_route_start_y_only(float target_y,
 
     if (xy_route_is_bypass(route_type) == 0U)
     {
-        xy_route_run_y_to(target_y);
-        xy_route.state = XY_ROUTE_DIRECT_RUN;
+        xy_route_run_final_y_or_wait(XY_ROUTE_DIRECT_RUN);
         return;
     }
 
@@ -362,10 +450,10 @@ void xy_route_process(void)
             {
                 if (xy_route_y_at_entry() != 0U)
                 {
+                    xy_route_trigger_servo3_entry();
                     if (xy_route.release_mode == XY_RELEASE_AFTER_ENTRY)
                     {
-                        xy_route_run_y_to(xy_route.target_y);
-                        xy_route.state = XY_ROUTE_BYPASS_TO_TARGET;
+                        xy_route_run_final_y_or_wait(XY_ROUTE_BYPASS_TO_TARGET);
                     }
                     else
                     {
@@ -384,6 +472,7 @@ void xy_route_process(void)
         case XY_ROUTE_BYPASS_WAIT_ENTRY_Y:
             if (xy_route_y_at_entry() != 0U)
             {
+                xy_route_trigger_servo3_entry();
                 if (xy_route.y_only == 0U)
                 {
                     xy_route_run_x_to_target();
@@ -391,8 +480,7 @@ void xy_route_process(void)
 
                 if (xy_route.release_mode == XY_RELEASE_AFTER_ENTRY)
                 {
-                    xy_route_run_y_to(xy_route.target_y);
-                    xy_route.state = XY_ROUTE_BYPASS_TO_TARGET;
+                    xy_route_run_final_y_or_wait(XY_ROUTE_BYPASS_TO_TARGET);
                 }
                 else
                 {
@@ -409,8 +497,8 @@ void xy_route_process(void)
             {
                 if (xy_route_y_at_exit() != 0U)
                 {
-                    xy_route_run_y_to(xy_route.target_y);
-                    xy_route.state = XY_ROUTE_BYPASS_TO_TARGET;
+                    xy_route_trigger_servo3_exit();
+                    xy_route_run_final_y_or_wait(XY_ROUTE_BYPASS_TO_TARGET);
                 }
                 else
                 {
@@ -423,12 +511,12 @@ void xy_route_process(void)
         case XY_ROUTE_BYPASS_WAIT_EXIT_Y:
             if (xy_route_y_at_exit() != 0U)
             {
+                xy_route_trigger_servo3_exit();
                 if (xy_route.y_only == 0U)
                 {
                     xy_route_run_x_to_target();
                 }
-                xy_route_run_y_to(xy_route.target_y);
-                xy_route.state = XY_ROUTE_BYPASS_TO_TARGET;
+                xy_route_run_final_y_or_wait(XY_ROUTE_BYPASS_TO_TARGET);
             }
             break;
 
@@ -441,13 +529,26 @@ void xy_route_process(void)
             }
             break;
 
+        case XY_ROUTE_SERVO_WAIT_SLOT:
+            if (beam_ctrl_is_busy() == 0U)
+            {
+                servo3_path_release_angle(xy_route.servo3_wait_angle_deg);
+                if (servo3_path_is_arrived() != 0U)
+                {
+                    xy_route.servo3_wait_done = 1U;
+                    xy_route_run_y_to(xy_route.target_y);
+                    xy_route.state = xy_route.servo3_wait_next_state;
+                }
+            }
+            break;
+
         case XY_ROUTE_CENTER_TO_EXIT:
             if (xy_route_x_past_exit() != 0U)
             {
                 if (xy_route_y_at_exit() != 0U)
                 {
-                    xy_route_run_y_to(xy_route.target_y);
-                    xy_route.state = XY_ROUTE_CENTER_TO_TARGET;
+                    xy_route_trigger_servo3_exit();
+                    xy_route_run_final_y_or_wait(XY_ROUTE_CENTER_TO_TARGET);
                 }
                 else
                 {
@@ -460,12 +561,12 @@ void xy_route_process(void)
         case XY_ROUTE_CENTER_WAIT_EXIT_Y:
             if (xy_route_y_at_exit() != 0U)
             {
+                xy_route_trigger_servo3_exit();
                 if (xy_route.y_only == 0U)
                 {
                     xy_route_run_x_to_target();
                 }
-                xy_route_run_y_to(xy_route.target_y);
-                xy_route.state = XY_ROUTE_CENTER_TO_TARGET;
+                xy_route_run_final_y_or_wait(XY_ROUTE_CENTER_TO_TARGET);
             }
             break;
 

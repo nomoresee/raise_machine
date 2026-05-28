@@ -90,7 +90,7 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-   HAL_Init();
+  HAL_Init();
 
   /* USER CODE BEGIN Init */
 
@@ -198,6 +198,8 @@ int main(void)
 //////舵机初始化定时器
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
+  servo3_path_init();
 
 
 
@@ -225,9 +227,9 @@ int main(void)
     // servo_sync_move(90,90);
     // HAL_Delay(5000);
   }
-  /* USER CODE END WHILE */
+    /* USER CODE END WHILE */
 
-  /* USER CODE BEGIN 3 */
+    /* USER CODE BEGIN 3 */
 
   /* USER CODE END 3 */
 }

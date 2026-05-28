@@ -353,6 +353,21 @@ void servo2_set_pulse_us(uint32_t pulse_us)
 
 /**
 ************************************************************************
+* @brief:      	servo3_set_angle(float angle_deg)
+* @param:      	angle_deg: servo3 angle, unit: degree
+* @retval:     	void
+* @details:    	Control servo3 on TIM1 CH3 / PE13, range 0~270 degrees.
+************************************************************************
+**/
+void servo3_set_angle(float angle_deg)
+{
+    float angle = servo_clamp_angle_range(angle_deg, SERVO3_MAX_ANGLE_DEG);
+
+    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, servo_angle_to_compare_range(angle, SERVO3_MAX_ANGLE_DEG));
+}
+
+/**
+************************************************************************
 * @brief:      	servo_sync_move(float servo1_target_deg, float servo2_target_deg)
 * @param:      	servo1_target_deg：舵机1目标角度，单位为度
 * @param:      	servo2_target_deg：舵机2目标角度，单位为度

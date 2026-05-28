@@ -22,6 +22,7 @@
 #include "stdbool.h"
 #include "math.h"
 #include "servo.h"
+#include "servo3_path/servo3_path.h"
 #include "adc.h"
 #include "spi.h"
 #include "dma.h"
