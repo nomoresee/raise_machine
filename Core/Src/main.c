@@ -63,10 +63,9 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 static float pos_target = 200.0f;
-static float pos_vel = 1.0f;
-static float beam_vel = 1.0f;
-static float lift_vel = 20.5f;
-//static uint32_t vofa_print_tick = 0U;
+static float pos_vel = 0.5f;
+static float beam_vel = 1.2f;
+static float lift_vel = 25.0f;
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
@@ -195,6 +194,7 @@ int main(void)
   xy_route_init();
   crane_route_init();
   crane_route_start();
+  vofa_debug_init(Motor1, Motor2, Motor3, Motor4);
 //////舵机初始化定时器
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
@@ -221,6 +221,7 @@ int main(void)
     pos_pid_sync_process();
     beam_ctrl_process();
     lift_ctrl_process();
+    vofa_debug_process();
 
     // servo_sync_move(0,0);
     // HAL_Delay(1000);

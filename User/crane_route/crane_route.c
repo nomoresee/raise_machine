@@ -297,14 +297,8 @@ static void crane_route_config_servo3_for_xy(uint8_t slot,
 
     if ((route_type == XY_ROUTE_UP) || (route_type == XY_ROUTE_DOWN))
     {
-        if (release_mode == XY_RELEASE_AFTER_ENTRY)
-        {
-            entry_enable = 1U;
-        }
-        else
-        {
-            exit_enable = 1U;
-        }
+        (void)release_mode;
+        entry_enable = 1U;
     }
     else if ((route_type == XY_ROUTE_CENTER_UP_EXIT) ||
              (route_type == XY_ROUTE_CENTER_DOWN_EXIT))
@@ -351,6 +345,11 @@ static void crane_route_move_xy_to_slot(uint8_t slot,
     (void)release_mode;
     beam_ctrl_set_target(crane_route_slot_pose[slot].beam_pos);
     beam_ctrl_start();
+#elif (CRANE_ROUTE_NO_CHASSIS != 0U)
+    crane_route_config_servo3_for_xy(slot, route_type, release_mode);
+    xy_route_start_y_only(crane_route_slot_pose[slot].beam_pos,
+                          route_type,
+                          release_mode);
 #else
     crane_route_config_servo3_for_xy(slot, route_type, release_mode);
 
@@ -376,6 +375,8 @@ static uint8_t crane_route_xy_is_busy(void)
     return pos_pid_sync_is_busy();
 #elif (CRANE_ROUTE_BEAM_ONLY != 0U)
     return beam_ctrl_is_busy();
+#elif (CRANE_ROUTE_NO_CHASSIS != 0U)
+    return xy_route_is_busy();
 #else
     return xy_route_is_busy();
 #endif
@@ -383,8 +384,15 @@ static uint8_t crane_route_xy_is_busy(void)
 
 static void crane_route_prepare_y_for_slot(uint8_t slot, xy_route_type_e route_type)
 {
-#if ((CRANE_ROUTE_CHASSIS_ONLY == 0U) && (CRANE_ROUTE_BEAM_ONLY == 0U))
+#if ((CRANE_ROUTE_CHASSIS_ONLY == 0U) && (CRANE_ROUTE_BEAM_ONLY == 0U) && (CRANE_ROUTE_NO_CHASSIS == 0U))
     if ((crane_route_is_beam_path_only() == 0U) && (slot <= CRANE_ROUTE_SLOT_COUNT))
+    {
+        xy_route_prepare_y(crane_route_slot_pose[slot].chassis_pos,
+                           route_type,
+                           crane_route_slot_pose[slot].beam_pos);
+    }
+#elif (CRANE_ROUTE_NO_CHASSIS != 0U)
+    if (slot <= CRANE_ROUTE_SLOT_COUNT)
     {
         xy_route_prepare_y(crane_route_slot_pose[slot].chassis_pos,
                            route_type,
@@ -843,6 +851,7 @@ void crane_route_process(void)
             }
             return_slot = leg->next_pick_slot;
             crane_route.current_slot = return_slot;
+            crane_route.current_action = CRANE_ROUTE_ACTION_PICK;
             crane_route_move_xy_to_slot(return_slot,
                                         leg->return_route,
                                         leg->return_release);

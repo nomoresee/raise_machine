@@ -2,12 +2,10 @@
 
 #include "headfile.h"
 #include "pi_uart_rx.h"
-#include "pos_sync/pos_pid_sync.h"
 #include "stdio.h"
 #include "string.h"
 
 /* 由 pos_pid_sync 在其控制周期内更新（本文件只读） */
-extern uint8_t pos_pid_sync_get_vofa_snapshot(pos_pid_sync_vofa_snapshot_t *out);
 
 typedef enum
 {
@@ -123,10 +121,10 @@ static void lcd_app_show_wrapped(uint16_t x0, uint16_t y0, const char *msg, uint
 
 static void lcd_app_update_main_values(void)
 {
-    pos_pid_sync_vofa_snapshot_t s;
+    vofa_debug_snapshot_t s;
     char line[48];
 
-    if (pos_pid_sync_get_vofa_snapshot(&s) == 0U || s.valid == 0U)
+    if (vofa_debug_get_snapshot(&s) == 0U || s.valid == 0U)
     {
         lcd_app_print_line(70, 60, "WAITING...                ", YELLOW);
         return;

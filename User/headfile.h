@@ -29,5 +29,6 @@
 #include "lcd/lcd.h"
 #include "lcd/lcd_app.h"
 #include "pi_uart/pi_uart_rx.h"
+#include "vofa_debug/vofa_debug.h"
 
 #endif
