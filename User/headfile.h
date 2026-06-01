@@ -30,5 +30,6 @@
 #include "lcd/lcd_app.h"
 #include "pi_uart/pi_uart_rx.h"
 #include "vofa_debug/vofa_debug.h"
+#include "app_start/app_start.h"
 
 #endif

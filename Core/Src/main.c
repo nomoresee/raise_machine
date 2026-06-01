@@ -89,7 +89,7 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+   HAL_Init();
 
   /* USER CODE BEGIN Init */
 
@@ -193,7 +193,6 @@ int main(void)
   lift_ctrl_set_max_vel(lift_vel);
   xy_route_init();
   crane_route_init();
-  crane_route_start();
 #if (CRANE_ROUTE_LIFT_ONLY != 0U)
   xy_route_stop();
   pos_pid_sync_stop();
@@ -211,6 +210,7 @@ int main(void)
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, GPIO_PIN_SET);
 
   pi_uart_rx_init();
+  app_start_init();
 
   /* USER CODE END 2 */
 
@@ -218,22 +218,21 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    //lcd_app_update();
+    lcd_app_update();
+    motor_angle_update_all();
+    app_start_process();
+#if (CRANE_ROUTE_LIFT_ONLY == 0U)
+    xy_route_process();
+    pos_pid_sync_process();
+    beam_ctrl_process();
+#endif
+    lift_ctrl_process();
+    vofa_debug_process();
 
-//     motor_angle_update_all();
-//     crane_route_process();
-// #if (CRANE_ROUTE_LIFT_ONLY == 0U)
-//     xy_route_process();
-//     pos_pid_sync_process();
-//     beam_ctrl_process();
-// #endif
-//     lift_ctrl_process();
-//     vofa_debug_process();
-
-    servo_sync_move(0,0);
-    HAL_Delay(1000);
-    servo_sync_move(90,90);
-    HAL_Delay(5000);
+    // servo_sync_move(0,0);
+    // HAL_Delay(1000);
+    // servo_sync_move(90,90);
+    // HAL_Delay(5000);
   }
     /* USER CODE END WHILE */
 

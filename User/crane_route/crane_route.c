@@ -15,6 +15,11 @@
 #define CRANE_ROUTE_PLACE_FOR_PICK3     7U
 #define CRANE_ROUTE_PLACE_FOR_SECOND    4U
 #define CRANE_ROUTE_PLACE_FOR_THIRD     8U
+#define CRANE_ROUTE_PICK_COUNT          3U
+#define CRANE_ROUTE_PLACE_COUNT         5U
+#define CRANE_ROUTE_GOODS_GREEN         6U
+#define CRANE_ROUTE_GOODS_WHITE_BEAN    7U
+#define CRANE_ROUTE_GOODS_SOYBEAN       8U
 
 #define CRANE_ROUTE_LIFT_PICK_1_POS     2.0f
 #define CRANE_ROUTE_LIFT_PICK_2_POS     3.5f
@@ -61,6 +66,9 @@ typedef struct
     uint8_t y_prepare_done;
     uint8_t beam_path_only;
     uint8_t extreme_return_slot;
+    uint8_t pick_goods[CRANE_ROUTE_PICK_COUNT];
+    uint8_t place_boxes[CRANE_ROUTE_PLACE_COUNT];
+    uint8_t draw_valid;
     crane_route_action_e current_action;
     uint32_t dwell_tick;
 } crane_route_t;
@@ -96,6 +104,88 @@ static uint8_t crane_route_is_valid_place(uint8_t slot)
 {
     return ((crane_route_is_upper_place(slot) != 0U) ||
             (crane_route_is_lower_place(slot) != 0U)) ? 1U : 0U;
+}
+
+static uint8_t crane_route_is_valid_goods(uint8_t goods)
+{
+    return ((goods == CRANE_ROUTE_GOODS_GREEN) ||
+            (goods == CRANE_ROUTE_GOODS_WHITE_BEAN) ||
+            (goods == CRANE_ROUTE_GOODS_SOYBEAN)) ? 1U : 0U;
+}
+
+static uint8_t crane_route_target_box_for_goods(uint8_t goods)
+{
+    if (goods == CRANE_ROUTE_GOODS_SOYBEAN)
+    {
+        return 1U;
+    }
+
+    if (goods == CRANE_ROUTE_GOODS_GREEN)
+    {
+        return 2U;
+    }
+
+    if (goods == CRANE_ROUTE_GOODS_WHITE_BEAN)
+    {
+        return 3U;
+    }
+
+    return 0U;
+}
+
+static uint8_t crane_route_place_slot_for_box(uint8_t box)
+{
+    for (uint8_t i = 0U; i < CRANE_ROUTE_PLACE_COUNT; i++)
+    {
+        if (crane_route.place_boxes[i] == box)
+        {
+            return (uint8_t)(i + 4U);
+        }
+    }
+
+    return 0U;
+}
+
+static uint8_t crane_route_place_for_pick(uint8_t pick_slot)
+{
+    uint8_t target_box;
+
+    if ((pick_slot == 0U) || (pick_slot > CRANE_ROUTE_PICK_COUNT))
+    {
+        return 0U;
+    }
+
+    target_box = crane_route_target_box_for_goods(crane_route.pick_goods[pick_slot - 1U]);
+    if (target_box == 0U)
+    {
+        return 0U;
+    }
+
+    return crane_route_place_slot_for_box(target_box);
+}
+
+static uint8_t crane_route_check_unique_range(const uint8_t *values,
+                                              uint8_t count,
+                                              uint8_t min_value,
+                                              uint8_t max_value)
+{
+    for (uint8_t i = 0U; i < count; i++)
+    {
+        if ((values[i] < min_value) || (values[i] > max_value))
+        {
+            return 0U;
+        }
+
+        for (uint8_t j = (uint8_t)(i + 1U); j < count; j++)
+        {
+            if (values[i] == values[j])
+            {
+                return 0U;
+            }
+        }
+    }
+
+    return 1U;
 }
 
 static xy_route_type_e crane_route_go_route_for(uint8_t pick_slot, uint8_t place_slot)
@@ -201,13 +291,14 @@ static void crane_route_build_plan(void)
     uint8_t second_place = CRANE_ROUTE_PLACE_FOR_SECOND;
     uint8_t third_place = CRANE_ROUTE_PLACE_FOR_THIRD;
 
-    if ((crane_route_is_valid_place(first_place) == 0U) ||
-        (crane_route_is_valid_place(second_place) == 0U) ||
-        (crane_route_is_valid_place(third_place) == 0U))
+    if (crane_route.draw_valid != 0U)
+    {
+        first_place = crane_route_place_for_pick(3U);
+    }
+
+    if (crane_route_is_valid_place(first_place) == 0U)
     {
         first_place = 4U;
-        second_place = 5U;
-        third_place = 6U;
     }
 
     if (crane_route_is_upper_place(first_place) != 0U)
@@ -219,6 +310,19 @@ static void crane_route_build_plan(void)
     {
         second_pick = 2U;
         third_pick = 1U;
+    }
+
+    if (crane_route.draw_valid != 0U)
+    {
+        second_place = crane_route_place_for_pick(second_pick);
+        third_place = crane_route_place_for_pick(third_pick);
+    }
+
+    if ((crane_route_is_valid_place(second_place) == 0U) ||
+        (crane_route_is_valid_place(third_place) == 0U))
+    {
+        second_place = 5U;
+        third_place = 6U;
     }
 
     crane_route.leg[0].pick_slot = 3U;
@@ -474,6 +578,44 @@ void crane_route_init(void)
     crane_route.state = CRANE_ROUTE_IDLE;
     crane_route.beam_path_only = CRANE_ROUTE_BEAM_PATH_ONLY_DEFAULT;
     crane_route.current_action = CRANE_ROUTE_ACTION_PICK;
+}
+
+uint8_t crane_route_set_draw_result(const uint8_t pick_goods[3], const uint8_t place_boxes[5])
+{
+    if ((pick_goods == NULL) || (place_boxes == NULL))
+    {
+        return 0U;
+    }
+
+    if (crane_route_check_unique_range(pick_goods,
+                                       CRANE_ROUTE_PICK_COUNT,
+                                       CRANE_ROUTE_GOODS_GREEN,
+                                       CRANE_ROUTE_GOODS_SOYBEAN) == 0U)
+    {
+        return 0U;
+    }
+
+    for (uint8_t i = 0U; i < CRANE_ROUTE_PICK_COUNT; i++)
+    {
+        if (crane_route_is_valid_goods(pick_goods[i]) == 0U)
+        {
+            return 0U;
+        }
+    }
+
+    if (crane_route_check_unique_range(place_boxes,
+                                       CRANE_ROUTE_PLACE_COUNT,
+                                       1U,
+                                       CRANE_ROUTE_PLACE_COUNT) == 0U)
+    {
+        return 0U;
+    }
+
+    (void)memcpy(crane_route.pick_goods, pick_goods, sizeof(crane_route.pick_goods));
+    (void)memcpy(crane_route.place_boxes, place_boxes, sizeof(crane_route.place_boxes));
+    crane_route.draw_valid = 1U;
+
+    return 1U;
 }
 
 void crane_route_start(void)

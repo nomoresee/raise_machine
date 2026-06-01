@@ -162,11 +162,7 @@ static void lcd_app_update_pi_text(void)
 {
     char buf[256];
 
-    /* 只有收到新的一行才刷新页面，避免“整块清屏+重画”造成肉眼可见频闪 */
-    if (pi_uart_rx_take_new_line(buf, sizeof(buf)) == 0U)
-    {
-        return;
-    }
+    pi_uart_rx_peek_line(buf, sizeof(buf));
 
     if (buf[0] == '\0')
     {

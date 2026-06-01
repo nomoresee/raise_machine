@@ -92,6 +92,12 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
   HAL_GPIO_Init(LCD_DC_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : PA15 */
+  GPIO_InitStruct.Pin = START_BTN_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(START_BTN_GPIO_Port, &GPIO_InitStruct);
+
 /* USER CODE BEGIN 2 */
   GPIO_InitStruct.Pin = LCD_PAGE_BTN_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;

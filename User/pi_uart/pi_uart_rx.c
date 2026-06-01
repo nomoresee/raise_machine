@@ -12,6 +12,15 @@ static size_t s_line_len;
 static char s_last_line[256];
 static volatile uint8_t s_has_new_line;
 
+static void pi_uart_rx_commit_line(void)
+{
+  s_line_acc[s_line_len] = '\0';
+  (void)strncpy(s_last_line, s_line_acc, sizeof(s_last_line) - 1U);
+  s_last_line[sizeof(s_last_line) - 1U] = '\0';
+  s_has_new_line = 1U;
+  s_line_len = 0U;
+}
+
 static void pi_uart_rx_restart(void)
 {
   (void)HAL_UARTEx_ReceiveToIdle_IT(&huart7, s_rx_chunk, PI_UART_RX_CHUNK);
@@ -40,11 +49,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
     {
       if (s_line_len > 0U)
       {
-        s_line_acc[s_line_len] = '\0';
-        (void)strncpy(s_last_line, s_line_acc, sizeof(s_last_line) - 1U);
-        s_last_line[sizeof(s_last_line) - 1U] = '\0';
-        s_has_new_line = 1U;
-        s_line_len = 0U;
+        pi_uart_rx_commit_line();
       }
     }
     else if (s_line_len < (sizeof(s_line_acc) - 1U))
@@ -52,6 +57,14 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
       if (c >= 32U && c < 127U)
       {
         s_line_acc[s_line_len++] = (char)c;
+        if ((s_line_len >= 4U) &&
+            (s_line_acc[s_line_len - 4U] == ';') &&
+            (s_line_acc[s_line_len - 3U] == 'E') &&
+            (s_line_acc[s_line_len - 2U] == 'N') &&
+            (s_line_acc[s_line_len - 1U] == 'D'))
+        {
+          pi_uart_rx_commit_line();
+        }
       }
     }
   }

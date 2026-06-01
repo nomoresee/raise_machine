@@ -16,7 +16,7 @@
 #define CRANE_ROUTE_NO_CHASSIS      0U
 
 /* 1: lift-only debug; chassis, beam and servos stay still. */
-#define CRANE_ROUTE_LIFT_ONLY       1U
+#define CRANE_ROUTE_LIFT_ONLY       0U
 
 /* 1: run planned route on beam(Y) only; chassis, lift and gripper stay still. */
 #define CRANE_ROUTE_BEAM_PATH_ONLY_DEFAULT  0U
@@ -69,6 +69,7 @@ typedef enum
 } crane_route_state_e;
 
 void crane_route_init(void);
+uint8_t crane_route_set_draw_result(const uint8_t pick_goods[3], const uint8_t place_boxes[5]);
 void crane_route_start(void);
 void crane_route_stop(void);
 void crane_route_process(void);
