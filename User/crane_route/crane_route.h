@@ -6,7 +6,7 @@
 #define CRANE_ROUTE_SLOT_COUNT  8U
 
 /* 0：未装舵机，抓取/放置仅 4 号到位后延时再抬升；1：启用舵机夹爪 */
-#define CRANE_ROUTE_USE_SERVO       1U
+#define CRANE_ROUTE_USE_SERVO       0U
 #define CRANE_ROUTE_PICK_DWELL_MS   1000U  /* 无舵机时：升降工作位停留时间（ms） */
 
 /* 1：仅横梁按路线槽位 beam_pos 逐点走位，底盘/升降/夹爪不动作；0：整机联动 */
@@ -14,6 +14,9 @@
 
 /* 1: keep chassis still, but run planned Y path with lift and servo3 coordinated. */
 #define CRANE_ROUTE_NO_CHASSIS      0U
+
+/* 1: lift-only debug; chassis, beam and servos stay still. */
+#define CRANE_ROUTE_LIFT_ONLY       1U
 
 /* 1: run planned route on beam(Y) only; chassis, lift and gripper stay still. */
 #define CRANE_ROUTE_BEAM_PATH_ONLY_DEFAULT  0U

@@ -12,14 +12,14 @@
  * 4,5,6 => 3-4-直线-1-上绕-5-上绕-2-下绕-6-回中
  * 7,4,5 => 3-7-直线-2-下绕-4-直线-1-上绕-5-回中
  */
-#define CRANE_ROUTE_PLACE_FOR_PICK3     4U
-#define CRANE_ROUTE_PLACE_FOR_SECOND    5U
-#define CRANE_ROUTE_PLACE_FOR_THIRD     6U
+#define CRANE_ROUTE_PLACE_FOR_PICK3     7U
+#define CRANE_ROUTE_PLACE_FOR_SECOND    4U
+#define CRANE_ROUTE_PLACE_FOR_THIRD     8U
 
 #define CRANE_ROUTE_LIFT_PICK_1_POS     2.0f
-#define CRANE_ROUTE_LIFT_PICK_2_POS     5.0f
-#define CRANE_ROUTE_LIFT_PICK_3_POS     6.0f
-#define CRANE_ROUTE_LIFT_PLACE_POS      7.0f
+#define CRANE_ROUTE_LIFT_PICK_2_POS     3.5f
+#define CRANE_ROUTE_LIFT_PICK_3_POS     5.0f
+#define CRANE_ROUTE_LIFT_PLACE_POS      1.0f
 #define CRANE_ROUTE_LIFT_SAFE_POS       12.0f
 #define CRANE_ROUTE_LEG_DWELL_MS        300U
 
@@ -350,6 +350,9 @@ static void crane_route_move_xy_to_slot(uint8_t slot,
     xy_route_start_y_only(crane_route_slot_pose[slot].beam_pos,
                           route_type,
                           release_mode);
+#elif (CRANE_ROUTE_LIFT_ONLY != 0U)
+    (void)route_type;
+    (void)release_mode;
 #else
     crane_route_config_servo3_for_xy(slot, route_type, release_mode);
 
@@ -377,6 +380,8 @@ static uint8_t crane_route_xy_is_busy(void)
     return beam_ctrl_is_busy();
 #elif (CRANE_ROUTE_NO_CHASSIS != 0U)
     return xy_route_is_busy();
+#elif (CRANE_ROUTE_LIFT_ONLY != 0U)
+    return 0U;
 #else
     return xy_route_is_busy();
 #endif
@@ -384,7 +389,7 @@ static uint8_t crane_route_xy_is_busy(void)
 
 static void crane_route_prepare_y_for_slot(uint8_t slot, xy_route_type_e route_type)
 {
-#if ((CRANE_ROUTE_CHASSIS_ONLY == 0U) && (CRANE_ROUTE_BEAM_ONLY == 0U) && (CRANE_ROUTE_NO_CHASSIS == 0U))
+#if ((CRANE_ROUTE_CHASSIS_ONLY == 0U) && (CRANE_ROUTE_BEAM_ONLY == 0U) && (CRANE_ROUTE_NO_CHASSIS == 0U) && (CRANE_ROUTE_LIFT_ONLY == 0U))
     if ((crane_route_is_beam_path_only() == 0U) && (slot <= CRANE_ROUTE_SLOT_COUNT))
     {
         xy_route_prepare_y(crane_route_slot_pose[slot].chassis_pos,
@@ -851,7 +856,6 @@ void crane_route_process(void)
             }
             return_slot = leg->next_pick_slot;
             crane_route.current_slot = return_slot;
-            crane_route.current_action = CRANE_ROUTE_ACTION_PICK;
             crane_route_move_xy_to_slot(return_slot,
                                         leg->return_route,
                                         leg->return_release);

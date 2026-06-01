@@ -41,7 +41,7 @@
 
 /* === 到位减速坡道：|err| < DECEL_RANGE 时，cmd_vel 上限按距离线性收缩到 0，
  *     再叠加按当前速度可停下的距离约束，避免过冲震荡 === */
-#define POS_PID_SYNC_DECEL_RANGE     200.0f   /* 减速带宽度（与 motor_angle 位置单位一致） */
+#define POS_PID_SYNC_DECEL_RANGE     120.0f   /* 减速带宽度（与 motor_angle 位置单位一致） */
 #define POS_PID_SYNC_DECEL_MIN_VEL   0.30f   /* 接近目标但未进入 SETTLE 时的最小限速，避免趴下 */
 #define POS_PID_SYNC_DECEL_ACCEL     80.0f   /* 等效减速度（输出轴速度单位/秒），用于按 v^2/2a 估剩余距 */
 

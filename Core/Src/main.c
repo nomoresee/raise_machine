@@ -63,9 +63,9 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 static float pos_target = 200.0f;
-static float pos_vel = 0.5f;
+static float pos_vel = 1.5f;
 static float beam_vel = 1.2f;
-static float lift_vel = 25.0f;
+static float lift_vel = 60.0f;
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
@@ -194,6 +194,11 @@ int main(void)
   xy_route_init();
   crane_route_init();
   crane_route_start();
+#if (CRANE_ROUTE_LIFT_ONLY != 0U)
+  xy_route_stop();
+  pos_pid_sync_stop();
+  beam_ctrl_stop();
+#endif
   vofa_debug_init(Motor1, Motor2, Motor3, Motor4);
 //////舵机初始化定时器
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
@@ -215,18 +220,20 @@ int main(void)
   {
     //lcd_app_update();
 
-    motor_angle_update_all();
-    crane_route_process();
-    xy_route_process();
-    pos_pid_sync_process();
-    beam_ctrl_process();
-    lift_ctrl_process();
-    vofa_debug_process();
+//     motor_angle_update_all();
+//     crane_route_process();
+// #if (CRANE_ROUTE_LIFT_ONLY == 0U)
+//     xy_route_process();
+//     pos_pid_sync_process();
+//     beam_ctrl_process();
+// #endif
+//     lift_ctrl_process();
+//     vofa_debug_process();
 
-    // servo_sync_move(0,0);
-    // HAL_Delay(1000);
-    // servo_sync_move(90,90);
-    // HAL_Delay(5000);
+    servo_sync_move(0,0);
+    HAL_Delay(1000);
+    servo_sync_move(90,90);
+    HAL_Delay(5000);
   }
     /* USER CODE END WHILE */
 
