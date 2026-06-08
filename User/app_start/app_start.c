@@ -8,21 +8,28 @@
 #include <string.h>
 
 #define APP_START_KEY_DEBOUNCE_MS 250U
+#if (CRANE_ROUTE_CHASSIS_ONLY == 0U)
+#define APP_START_DELAY_MS        8000U
 #define APP_START_PI_LINE_SIZE    128U
 #define APP_PICK_COUNT            3U
 #define APP_PLACE_COUNT           5U
+#endif
 
 typedef enum
 {
     APP_START_WAIT_KEY = 0,
     APP_START_WAIT_PI_PACKET,
+    APP_START_DELAY_BEFORE_RUN,
     APP_START_RUNNING
 } app_start_state_t;
 
 static app_start_state_t app_start_state;
 static uint8_t app_start_key_down;
 static uint32_t app_start_key_tick;
+#if (CRANE_ROUTE_CHASSIS_ONLY == 0U)
+static uint32_t app_start_delay_tick;
 static char app_start_pi_line[APP_START_PI_LINE_SIZE];
+#endif
 
 static uint8_t app_start_key_pressed(void)
 {
@@ -45,6 +52,7 @@ static uint8_t app_start_key_pressed(void)
     return 0U;
 }
 
+#if (CRANE_ROUTE_CHASSIS_ONLY == 0U)
 static void app_start_send_request(void)
 {
     uint8_t cmd = 'G';
@@ -134,30 +142,42 @@ static uint8_t app_start_parse_pi_packet(const char *line,
 
     return 1U;
 }
+#endif
 
 void app_start_init(void)
 {
     app_start_state = APP_START_WAIT_KEY;
     app_start_key_down = 0U;
     app_start_key_tick = 0U;
+#if (CRANE_ROUTE_CHASSIS_ONLY == 0U)
+    app_start_delay_tick = 0U;
     (void)memset(app_start_pi_line, 0, sizeof(app_start_pi_line));
+#endif
 }
 
 void app_start_process(void)
 {
+#if (CRANE_ROUTE_CHASSIS_ONLY == 0U)
     uint8_t pick_goods[APP_PICK_COUNT];
     uint8_t place_boxes[APP_PLACE_COUNT];
+#endif
 
     switch (app_start_state)
     {
         case APP_START_WAIT_KEY:
             if (app_start_key_pressed() != 0U)
             {
+#if (CRANE_ROUTE_CHASSIS_ONLY != 0U)
+                crane_route_start();
+                app_start_state = APP_START_RUNNING;
+#else
                 app_start_send_request();
                 app_start_state = APP_START_WAIT_PI_PACKET;
+#endif
             }
             break;
 
+#if (CRANE_ROUTE_CHASSIS_ONLY == 0U)
         case APP_START_WAIT_PI_PACKET:
             if (pi_uart_rx_take_new_line(app_start_pi_line, sizeof(app_start_pi_line)) != 0U)
             {
@@ -165,12 +185,21 @@ void app_start_process(void)
                 {
                     if (crane_route_set_draw_result(pick_goods, place_boxes) != 0U)
                     {
-                        crane_route_start();
-                        app_start_state = APP_START_RUNNING;
+                        app_start_delay_tick = HAL_GetTick();
+                        app_start_state = APP_START_DELAY_BEFORE_RUN;
                     }
                 }
             }
             break;
+
+        case APP_START_DELAY_BEFORE_RUN:
+            if ((HAL_GetTick() - app_start_delay_tick) >= APP_START_DELAY_MS)
+            {
+                crane_route_start();
+                app_start_state = APP_START_RUNNING;
+            }
+            break;
+#endif
 
         case APP_START_RUNNING:
             crane_route_process();

@@ -57,6 +57,25 @@ static crane_slot_pose_t crane_route_slot_pose[CRANE_ROUTE_SLOT_COUNT + 1U] =
     {-850.0f, -23.0f, CRANE_ROUTE_LIFT_PLACE_POS, CRANE_ROUTE_LIFT_SAFE_POS},//8
 };
 
+#if (CRANE_ROUTE_CHASSIS_ONLY != 0U)
+#define CRANE_ROUTE_CHASSIS_DEBUG_DWELL_MS 1000U
+
+static const uint8_t crane_route_chassis_debug_slots[] =
+{
+    1U,
+    6U,
+    3U,
+    8U,
+    2U,
+    7U,
+    0U
+};
+
+static uint8_t crane_route_chassis_debug_index;
+#define CRANE_ROUTE_CHASSIS_DEBUG_COUNT \
+    ((uint8_t)(sizeof(crane_route_chassis_debug_slots) / sizeof(crane_route_chassis_debug_slots[0])))
+#endif
+
 typedef struct
 {
     crane_route_state_e state;
@@ -74,6 +93,62 @@ typedef struct
 } crane_route_t;
 
 static crane_route_t crane_route;
+
+#if (CRANE_ROUTE_CHASSIS_ONLY != 0U)
+static void crane_route_chassis_debug_run_current(void)
+{
+    uint8_t slot;
+
+    if (crane_route_chassis_debug_index >= CRANE_ROUTE_CHASSIS_DEBUG_COUNT)
+    {
+        crane_route.state = CRANE_ROUTE_FINISHED;
+        pos_pid_sync_stop();
+        return;
+    }
+
+    slot = crane_route_chassis_debug_slots[crane_route_chassis_debug_index];
+    if (slot > CRANE_ROUTE_SLOT_COUNT)
+    {
+        crane_route.state = CRANE_ROUTE_FINISHED;
+        pos_pid_sync_stop();
+        return;
+    }
+
+    crane_route.current_slot = slot;
+    crane_route.state = CRANE_ROUTE_MOVE_TO_PICK;
+    pos_pid_sync_set_target(crane_route_slot_pose[slot].chassis_pos);
+    pos_pid_sync_start();
+}
+
+static void crane_route_chassis_debug_process(void)
+{
+    if ((crane_route.state == CRANE_ROUTE_IDLE) ||
+        (crane_route.state == CRANE_ROUTE_FINISHED))
+    {
+        return;
+    }
+
+    if (crane_route.state == CRANE_ROUTE_LEG_DWELL)
+    {
+        if ((HAL_GetTick() - crane_route.dwell_tick) < CRANE_ROUTE_CHASSIS_DEBUG_DWELL_MS)
+        {
+            return;
+        }
+
+        crane_route_chassis_debug_index++;
+        crane_route_chassis_debug_run_current();
+        return;
+    }
+
+    if (pos_pid_sync_is_busy() != 0U)
+    {
+        return;
+    }
+
+    crane_route.dwell_tick = HAL_GetTick();
+    crane_route.state = CRANE_ROUTE_LEG_DWELL;
+}
+#endif
 
 static uint8_t crane_route_is_beam_path_only(void)
 {
@@ -628,15 +703,24 @@ void crane_route_start(void)
     crane_route.current_action = CRANE_ROUTE_ACTION_PICK;
     crane_route.dwell_tick = HAL_GetTick();
     crane_route_stop_xy();
+#if (CRANE_ROUTE_CHASSIS_ONLY != 0U)
+    crane_route_chassis_debug_index = 0U;
+    crane_route_chassis_debug_run_current();
+#else
     lift_ctrl_stop();
     crane_route.state = CRANE_ROUTE_BUILD_PLAN;
+#endif
 }
 
 void crane_route_stop(void)
 {
     crane_route.state = CRANE_ROUTE_IDLE;
     crane_route_stop_xy();
+#if (CRANE_ROUTE_CHASSIS_ONLY != 0U)
+    crane_route_chassis_debug_index = 0U;
+#else
     lift_ctrl_stop();
+#endif
 }
 
 void crane_route_set_beam_path_only(uint8_t enable)
@@ -689,6 +773,10 @@ uint8_t crane_route_get_current_slot(void)
 void crane_route_get_current_target(float *x, float *y)
 {
     uint8_t slot = crane_route.current_slot;
+#if (CRANE_ROUTE_CHASSIS_ONLY != 0U)
+    float target_x = (slot <= CRANE_ROUTE_SLOT_COUNT) ? crane_route_slot_pose[slot].chassis_pos : 0.0f;
+    float target_y = 0.0f;
+#else
     float target_x = xy_route_get_target_x();
     float target_y = xy_route_get_target_y();
 
@@ -698,6 +786,7 @@ void crane_route_get_current_target(float *x, float *y)
         target_x = crane_route_slot_pose[slot].chassis_pos;
         target_y = crane_route_slot_pose[slot].beam_pos;
     }
+#endif
 
     if (x != NULL)
     {
@@ -712,6 +801,11 @@ void crane_route_get_current_target(float *x, float *y)
 void crane_route_get_current_pose_target(float *x, float *y, float *z)
 {
     uint8_t slot = crane_route.current_slot;
+#if (CRANE_ROUTE_CHASSIS_ONLY != 0U)
+    float target_x = (slot <= CRANE_ROUTE_SLOT_COUNT) ? crane_route_slot_pose[slot].chassis_pos : 0.0f;
+    float target_y = 0.0f;
+    float target_z = 0.0f;
+#else
     float target_x = xy_route_get_target_x();
     float target_y = xy_route_get_target_y();
     float target_z = 0.0f;
@@ -741,6 +835,7 @@ void crane_route_get_current_pose_target(float *x, float *y, float *z)
             target_z = crane_route_slot_pose[slot].lift_safe_pos;
         }
     }
+#endif
 
     if (x != NULL)
     {
@@ -758,6 +853,10 @@ void crane_route_get_current_pose_target(float *x, float *y, float *z)
 
 void crane_route_process(void)
 {
+#if (CRANE_ROUTE_CHASSIS_ONLY != 0U)
+    crane_route_chassis_debug_process();
+    return;
+#else
     crane_route_leg_t *leg = crane_route_current_leg();
     uint8_t return_slot;
 
@@ -1031,4 +1130,5 @@ void crane_route_process(void)
             crane_route.state = CRANE_ROUTE_IDLE;
             break;
     }
+#endif
 }

@@ -21,7 +21,7 @@
 /* 1: run planned route on beam(Y) only; chassis, lift and gripper stay still. */
 #define CRANE_ROUTE_BEAM_PATH_ONLY_DEFAULT  0U
 
-/* 1: chassis-only debug, only run pos_pid_sync along chassis_pos route */
+/* 1: chassis-only debug, press START to run fixed chassis route without vision. */
 #define CRANE_ROUTE_CHASSIS_ONLY    0U
 
 typedef struct

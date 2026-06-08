@@ -63,9 +63,9 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 static float pos_target = 200.0f;
-static float pos_vel = 1.5f;
+static float pos_vel = 0.5f;
 static float beam_vel = 1.2f;
-static float lift_vel = 60.0f;
+static float lift_vel = 30.0f;
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
@@ -218,7 +218,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    lcd_app_update();
+    //lcd_app_update();
     motor_angle_update_all();
     app_start_process();
 #if (CRANE_ROUTE_LIFT_ONLY == 0U)

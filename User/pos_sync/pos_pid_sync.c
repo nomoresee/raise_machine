@@ -19,11 +19,11 @@
 #undef POS_PID_SYNC_BAL_KP
 #undef POS_PID_SYNC_BAL_OUT_MAX
 #undef POS_PID_SYNC_BAL_OUT_MIN
-#define POS_PID_SYNC_BAL_KP          0.08f
+#define POS_PID_SYNC_BAL_KP          0.2f
 #define POS_PID_SYNC_BAL_OUT_MAX     0.8f
 #define POS_PID_SYNC_BAL_OUT_MIN    -0.8f
 
-#define POS_PID_SYNC_VEL_KP          0.20f//速度给定环，根据位置误差和当前速度算下发速度
+#define POS_PID_SYNC_VEL_KP          0.3f//速度给定环，根据位置误差和当前速度算下发速度
 #define POS_PID_SYNC_VEL_KI          0.0f
 #define POS_PID_SYNC_VEL_KD          0.0f
 #define POS_PID_SYNC_VEL_OUT_MAX     40.0f
@@ -31,17 +31,17 @@
 #define POS_PID_SYNC_VEL_CMD_RATIO   30.0f
 
 #define POS_PID_SYNC_SM_DWELL_MS     2000U
-#define POS_PID_SYNC_SM_REACH_TOL    5.0f
-#define POS_PID_SYNC_REACH_TOL       5.0f
-#define POS_PID_SYNC_SYNC_REACH_TOL  2.0f
+#define POS_PID_SYNC_SM_REACH_TOL    1.0f
+#define POS_PID_SYNC_REACH_TOL       1.0f
+#define POS_PID_SYNC_SYNC_REACH_TOL  1.0f
 #define POS_PID_SYNC_REACH_HOLD_MS   80U
-#define POS_PID_SYNC_SETTLE_TOL      1.0f
+#define POS_PID_SYNC_SETTLE_TOL      0.2f
 #define POS_PID_SYNC_SYNC_DEADBAND   0.8f
 #define POS_PID_SYNC_HOLD_VEL        0.0f
 
 /* === 到位减速坡道：|err| < DECEL_RANGE 时，cmd_vel 上限按距离线性收缩到 0，
  *     再叠加按当前速度可停下的距离约束，避免过冲震荡 === */
-#define POS_PID_SYNC_DECEL_RANGE     120.0f   /* 减速带宽度（与 motor_angle 位置单位一致） */
+#define POS_PID_SYNC_DECEL_RANGE     100.0f   /* 减速带宽度（与 motor_angle 位置单位一致） */
 #define POS_PID_SYNC_DECEL_MIN_VEL   0.30f   /* 接近目标但未进入 SETTLE 时的最小限速，避免趴下 */
 #define POS_PID_SYNC_DECEL_ACCEL     80.0f   /* 等效减速度（输出轴速度单位/秒），用于按 v^2/2a 估剩余距 */
 
