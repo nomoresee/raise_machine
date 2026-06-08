@@ -636,11 +636,11 @@ static void crane_route_set_gripper(crane_route_action_e action)
 #if (CRANE_ROUTE_USE_SERVO != 0U)
     if (action == CRANE_ROUTE_ACTION_PICK)
     {
-        servo1_set_angle(SERVO1_GRIP_CLOSE_ANGLE);
+        claw_close_pick();
     }
     else
     {
-        servo1_set_angle(SERVO1_GRIP_OPEN_ANGLE);
+        claw_open();
     }
 #else
     (void)action;
@@ -708,6 +708,7 @@ void crane_route_start(void)
     crane_route_chassis_debug_run_current();
 #else
     lift_ctrl_stop();
+    claw_close();
     crane_route.state = CRANE_ROUTE_BUILD_PLAN;
 #endif
 }
@@ -906,12 +907,14 @@ void crane_route_process(void)
             break;
 
         case CRANE_ROUTE_LIFT_DOWN_PICK:
+            claw_open();
             crane_route_move_lift_to(crane_route_slot_pose[crane_route.current_slot].lift_work_pos);
             crane_route.state = CRANE_ROUTE_WAIT_LIFT_DOWN_PICK;
             break;
 
         case CRANE_ROUTE_WAIT_LIFT_DOWN_PICK:
-            if (crane_route_lift_is_busy() == 0U)
+            if ((crane_route_lift_is_busy() == 0U) &&
+                (claw_is_busy() == 0U))
             {
                 crane_route.state = CRANE_ROUTE_GRIPPER_PICK;
             }
@@ -926,7 +929,7 @@ void crane_route_process(void)
 
         case CRANE_ROUTE_GRIPPER_PICK_HOLD:
             if ((crane_route_is_beam_path_only() != 0U) ||
-                ((HAL_GetTick() - crane_route.dwell_tick) >= CRANE_ROUTE_PICK_DWELL_MS))
+                (claw_is_busy() == 0U))
             {
                 crane_route.state = CRANE_ROUTE_LIFT_UP_AFTER_PICK;
             }
@@ -1006,7 +1009,7 @@ void crane_route_process(void)
 
         case CRANE_ROUTE_GRIPPER_PLACE_HOLD:
             if ((crane_route_is_beam_path_only() != 0U) ||
-                ((HAL_GetTick() - crane_route.dwell_tick) >= CRANE_ROUTE_PICK_DWELL_MS))
+                (claw_is_busy() == 0U))
             {
                 crane_route.state = CRANE_ROUTE_LIFT_UP_AFTER_PLACE;
             }
@@ -1038,6 +1041,7 @@ void crane_route_process(void)
             }
             if (crane_route_lift_is_busy() == 0U)
             {
+                claw_close();
                 if ((crane_route.y_prepare_done == 0U) &&
                     (servo3_path_is_extreme_slot(leg->place_slot) == 0U))
                 {

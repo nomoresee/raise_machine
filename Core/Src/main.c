@@ -63,7 +63,7 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 static float pos_target = 200.0f;
-static float pos_vel = 0.5f;
+static float pos_vel = 1.0f;
 static float beam_vel = 1.2f;
 static float lift_vel = 30.0f;
 
@@ -203,6 +203,7 @@ int main(void)
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
+  claw_init();
   servo3_path_init();
 
 
@@ -227,6 +228,7 @@ int main(void)
     beam_ctrl_process();
 #endif
     lift_ctrl_process();
+    claw_process();
     vofa_debug_process();
 
     // servo_sync_move(0,0);
