@@ -11,7 +11,7 @@
  * - 对角线优化段：入口通过后 Y 直接去最终目标 Y，不再等出口。
  */
 
-/* X 入口/出口点：+X 侧靠近取货区，-X 侧靠近放置区。 */
+/* X 入口/出口点：-X 侧靠近取货区，+X 侧靠近放置区。 */
 #define XY_ROUTE_X_ENTRY_PICK_SIDE       -780.0f
 #define XY_ROUTE_X_ENTRY_PLACE_SIDE     500.0f
 
@@ -97,17 +97,17 @@ static uint8_t xy_route_is_center_bypass(xy_route_type_e route_type)
 
 static xy_route_side_e xy_route_side_from_x(float x, float target_x)
 {
-    if (x >= XY_ROUTE_X_ENTRY_PICK_SIDE)
+    if (x <= XY_ROUTE_X_ENTRY_PICK_SIDE)
     {
         return XY_ROUTE_SIDE_PICK;
     }
 
-    if (x <= XY_ROUTE_X_ENTRY_PLACE_SIDE)
+    if (x >= XY_ROUTE_X_ENTRY_PLACE_SIDE)
     {
         return XY_ROUTE_SIDE_PLACE;
     }
 
-    return (target_x >= 0.0f) ? XY_ROUTE_SIDE_PICK : XY_ROUTE_SIDE_PLACE;
+    return (target_x <= 0.0f) ? XY_ROUTE_SIDE_PICK : XY_ROUTE_SIDE_PLACE;
 }
 
 static float xy_route_x_for_side(xy_route_side_e side)

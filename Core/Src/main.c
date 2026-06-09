@@ -220,21 +220,21 @@ int main(void)
   while (1)
   {
 //     // lcd_app_update();
-//     motor_angle_update_all();
-//     app_start_process();
-// // #if (CRANE_ROUTE_LIFT_ONLY == 0U)
-//     xy_route_process();
-//     pos_pid_sync_process();
-//     beam_ctrl_process();
-// // #endif
-//     lift_ctrl_process();
-//     claw_process();
-//     vofa_debug_process();
+    motor_angle_update_all();
+    app_start_process();
+// #if (CRANE_ROUTE_LIFT_ONLY == 0U)
+    xy_route_process();
+    pos_pid_sync_process();
+    beam_ctrl_process();
+// #endif
+    lift_ctrl_process();
+    claw_process();
+    vofa_debug_process();
 
-   servo3_set_angle(0.0f);
-   HAL_Delay(2000);
-    servo3_set_angle(180.0f);
-    HAL_Delay(4000);
+  //  servo3_set_angle(0.0f);
+  //  HAL_Delay(2000);
+  //   servo3_set_angle(180.0f);
+  //   HAL_Delay(4000);
   }
     /* USER CODE END WHILE */
 
