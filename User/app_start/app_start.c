@@ -119,16 +119,16 @@ static uint8_t app_start_parse_pi_packet(const char *line,
         return 0U;
     }
 
-    /* Pi sends PICK in physical order 1,3,2. Store it as indexed slots 1,2,3. */
-    pick_goods[0] = (uint8_t)pick0;
-    pick_goods[1] = (uint8_t)pick2;
+    /* Pi sends PICK in physical order 2,3,1. Store it as indexed slots 1,2,3. */
+    pick_goods[0] = (uint8_t)pick2;
+    pick_goods[1] = (uint8_t)pick0;
     pick_goods[2] = (uint8_t)pick1;
-    /* Pi sends PLACE in physical order 8,7,6,5,4. Store it as slots 4,5,6,7,8. */
-    place_boxes[0] = (uint8_t)place4;
-    place_boxes[1] = (uint8_t)place3;
+    /* Pi sends PLACE in physical order 4,5,6,7,8. Store it as slots 4,5,6,7,8. */
+    place_boxes[0] = (uint8_t)place0;
+    place_boxes[1] = (uint8_t)place1;
     place_boxes[2] = (uint8_t)place2;
-    place_boxes[3] = (uint8_t)place1;
-    place_boxes[4] = (uint8_t)place0;
+    place_boxes[3] = (uint8_t)place3;
+    place_boxes[4] = (uint8_t)place4;
 
     if (app_start_check_unique_range(pick_goods, APP_PICK_COUNT, 6U, 8U) == 0U)
     {

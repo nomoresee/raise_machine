@@ -63,7 +63,7 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 static float pos_target = 200.0f;
-static float pos_vel = 1.0f;
+static float pos_vel = 0.5f;
 static float beam_vel = 1.2f;
 static float lift_vel = 30.0f;
 
@@ -75,7 +75,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 }
 /* USER CODE END 0 */
 
-/**
+/**                                             
   * @brief  The application entry point.
   * @retval int
   */
@@ -219,22 +219,22 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    //lcd_app_update();
-    motor_angle_update_all();
-    app_start_process();
-#if (CRANE_ROUTE_LIFT_ONLY == 0U)
-    xy_route_process();
-    pos_pid_sync_process();
-    beam_ctrl_process();
-#endif
-    lift_ctrl_process();
-    claw_process();
-    vofa_debug_process();
+//     // lcd_app_update();
+//     motor_angle_update_all();
+//     app_start_process();
+// // #if (CRANE_ROUTE_LIFT_ONLY == 0U)
+//     xy_route_process();
+//     pos_pid_sync_process();
+//     beam_ctrl_process();
+// // #endif
+//     lift_ctrl_process();
+//     claw_process();
+//     vofa_debug_process();
 
-    // servo_sync_move(0,0);
-    // HAL_Delay(1000);
-    // servo_sync_move(90,90);
-    // HAL_Delay(5000);
+   servo3_set_angle(0.0f);
+   HAL_Delay(2000);
+    servo3_set_angle(180.0f);
+    HAL_Delay(4000);
   }
     /* USER CODE END WHILE */
 

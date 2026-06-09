@@ -12,16 +12,16 @@
  */
 
 /* X 入口/出口点：+X 侧靠近取货区，-X 侧靠近放置区。 */
-#define XY_ROUTE_X_ENTRY_PICK_SIDE       780.0f
-#define XY_ROUTE_X_ENTRY_PLACE_SIDE     -500.0f
+#define XY_ROUTE_X_ENTRY_PICK_SIDE       -780.0f
+#define XY_ROUTE_X_ENTRY_PLACE_SIDE     500.0f
 
 /* 上绕：入口在 +20，出口在 -20。 */
-#define XY_ROUTE_Y_UP_ENTRY               8.0f
-#define XY_ROUTE_Y_UP_EXIT               -8.0f
+#define XY_ROUTE_Y_UP_ENTRY               -8.0f
+#define XY_ROUTE_Y_UP_EXIT               8.0f
 
 /* 下绕：入口在 -20，出口在 +20。 */
-#define XY_ROUTE_Y_DOWN_ENTRY            -8.0f
-#define XY_ROUTE_Y_DOWN_EXIT              8.0f
+#define XY_ROUTE_Y_DOWN_ENTRY            8.0f
+#define XY_ROUTE_Y_DOWN_EXIT              -8.0f
 
 /* X 到入口前提前多少开始检查 Y，给 X 停车留余量。 */
 #define XY_ROUTE_X_WAIT_MARGIN            25.0f

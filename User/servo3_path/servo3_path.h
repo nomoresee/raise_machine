@@ -14,15 +14,15 @@
  */
 #define SERVO3_PICK_AREA_ANGLE_DEG       270.0f
 #define SERVO3_PLACE_MID_ANGLE_DEG        90.0f
-#define SERVO3_SLOT4_ANGLE_DEG           180.0f
-#define SERVO3_SLOT8_ANGLE_DEG             0.0f
+#define SERVO3_SLOT4_ANGLE_DEG           0.0f
+#define SERVO3_SLOT8_ANGLE_DEG             180.0f
 
 /*
  * 4/8 号位置附近的 Y 轴安全等待点。
  * Y 到达该点后，servo3 才允许旋转，避免延长杆旋转时打到左右机械支撑。
  */
-#define SERVO3_SLOT4_SAFE_Y               15.0f
-#define SERVO3_SLOT8_SAFE_Y              -15.0f
+#define SERVO3_SLOT4_SAFE_Y               -15.0f
+#define SERVO3_SLOT8_SAFE_Y                15.0f
 
 /*
  * servo3 没有位置反馈，到位判断只能按时间估算：
