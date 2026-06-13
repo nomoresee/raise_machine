@@ -12,7 +12,7 @@
  */
 
 /* X 入口/出口点：-X 侧靠近取货区，+X 侧靠近放置区。 */
-#define XY_ROUTE_X_ENTRY_PICK_SIDE       -780.0f
+#define XY_ROUTE_X_ENTRY_PICK_SIDE       -750.0f
 #define XY_ROUTE_X_ENTRY_PLACE_SIDE     500.0f
 
 /* 上绕：入口在 +20，出口在 -20。 */
