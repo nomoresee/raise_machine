@@ -63,7 +63,7 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 static float pos_target = 200.0f;
-static float pos_vel = 0.5f;
+static float pos_vel = 1.5f;
 static float beam_vel = 1.2f;
 static float lift_vel = 30.0f;
 
@@ -220,7 +220,7 @@ int main(void)
   while (1)
   {
 //     // lcd_app_update();
-    motor_angle_update_all();
+    motor_angle_update_all();//-12.5->12.5
     app_start_process();
 // #if (CRANE_ROUTE_LIFT_ONLY == 0U)
     xy_route_process();

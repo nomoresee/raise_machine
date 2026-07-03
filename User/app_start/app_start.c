@@ -9,7 +9,7 @@
 
 #define APP_START_KEY_DEBOUNCE_MS 250U
 #if (CRANE_ROUTE_CHASSIS_ONLY == 0U)
-#define APP_START_DELAY_MS        8000U
+#define APP_START_DELAY_MS        8000U//8s
 #define APP_START_PI_LINE_SIZE    128U
 #define APP_PICK_COUNT            3U
 #define APP_PLACE_COUNT           5U
