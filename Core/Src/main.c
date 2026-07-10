@@ -114,6 +114,7 @@ int main(void)
   MX_ADC1_Init();
   MX_SPI1_Init();
   MX_UART7_Init();
+  MX_TIM12_Init();
   /* USER CODE BEGIN 2 */
   power(1);
   HAL_Delay(200);
