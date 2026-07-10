@@ -63,7 +63,7 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 static float pos_target = 200.0f;
-static float pos_vel = 1.5f;
+static float pos_vel = 2.0f;
 static float beam_vel = 1.2f;
 static float lift_vel = 30.0f;
 

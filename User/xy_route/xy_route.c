@@ -58,6 +58,7 @@ typedef struct
     uint8_t servo3_exit_done;
     uint8_t servo3_wait_enable;
     uint8_t servo3_wait_done;
+    uint8_t servo3_wait_at_entry_gate;
     xy_route_state_e servo3_wait_next_state;
     float servo3_entry_angle_deg;
     float servo3_exit_angle_deg;
@@ -307,6 +308,24 @@ static void xy_route_run_final_y_or_wait(xy_route_state_e next_state)
     xy_route.state = next_state;
 }
 
+static void xy_route_start_common(float target_x,
+                                  float target_y,
+                                  xy_route_type_e route_type,
+                                  xy_release_mode_e release_mode)
+{
+    xy_route.start_x = pos_pid_sync_get_current_pos();
+    xy_route.start_y = beam_ctrl_get_current_pos();
+    xy_route.target_x = target_x;
+    xy_route.target_y = target_y;
+    xy_route.route_type = route_type;
+    xy_route.release_mode = release_mode;
+    xy_route.x_dir = (target_x >= xy_route.start_x) ? 1 : -1;
+    xy_route.busy = 1U;
+    xy_route.y_only = 0U;
+    xy_route.servo3_wait_at_entry_gate = 0U;
+    xy_route_load_servo3_pending();
+}
+
 void xy_route_init(void)
 {
     memset(&xy_route, 0, sizeof(xy_route));
@@ -349,16 +368,7 @@ void xy_route_start(float target_x,
                     xy_route_type_e route_type,
                     xy_release_mode_e release_mode)
 {
-    xy_route.start_x = pos_pid_sync_get_current_pos();
-    xy_route.start_y = beam_ctrl_get_current_pos();
-    xy_route.target_x = target_x;
-    xy_route.target_y = target_y;
-    xy_route.route_type = route_type;
-    xy_route.release_mode = release_mode;
-    xy_route.x_dir = (target_x >= xy_route.start_x) ? 1 : -1;
-    xy_route.busy = 1U;
-    xy_route.y_only = 0U;
-    xy_route_load_servo3_pending();
+    xy_route_start_common(target_x, target_y, route_type, release_mode);
 
     if (xy_route_is_center_bypass(route_type) != 0U)
     {
@@ -383,6 +393,44 @@ void xy_route_start(float target_x,
     xy_route.state = XY_ROUTE_BYPASS_TO_ENTRY;
 }
 
+void xy_route_start_extreme_return(float target_x,
+                                   float target_y,
+                                   xy_route_type_e route_type,
+                                   xy_release_mode_e release_mode,
+                                   float safe_y,
+                                   float servo3_angle_deg)
+{
+    /* 这一路径不使用常规入口/出口舵机触发，避免提前回转。 */
+    xy_route_set_servo3_triggers(0U, 0.0f, 0U, 0.0f);
+    xy_route_set_servo3_target_wait(1U, safe_y, servo3_angle_deg);
+    xy_route_start_common(target_x, target_y, route_type, release_mode);
+    xy_route.servo3_wait_at_entry_gate = 1U;
+
+    if (xy_route_is_center_bypass(route_type) != 0U)
+    {
+        xy_route.exit_x = xy_route_x_for_side(xy_route_side_from_x(xy_route.start_x, target_x));
+        xy_route.exit_y = xy_route_exit_y_for(route_type, target_y);
+        xy_route_run_y_to(safe_y);
+        xy_route_run_x_to_target();
+        xy_route.state = XY_ROUTE_CENTER_TO_EXIT;
+        return;
+    }
+
+    if (xy_route_is_bypass(route_type) == 0U)
+    {
+        /* 直线返程：X 起动后立刻在安全 Y 点回转 servo3。 */
+        xy_route_run_x_to_target();
+        xy_route_run_final_y_or_wait(XY_ROUTE_DIRECT_RUN);
+        return;
+    }
+
+    /* 绕障返程：先让 X 从极限位走到第一个入口，再回转 servo3。 */
+    xy_route_config_gate(target_x, target_y, route_type);
+    xy_route_run_y_to(safe_y);
+    xy_route_run_x_to_target();
+    xy_route.state = XY_ROUTE_BYPASS_TO_ENTRY;
+}
+
 void xy_route_start_y_only(float target_y,
                            xy_route_type_e route_type,
                            xy_release_mode_e release_mode)
@@ -394,6 +442,7 @@ void xy_route_start_y_only(float target_y,
     xy_route.release_mode = release_mode;
     xy_route.busy = 1U;
     xy_route.y_only = 1U;
+    xy_route.servo3_wait_at_entry_gate = 0U;
     xy_route_load_servo3_pending();
 
     xy_route.entry_y = xy_route_entry_y_for(route_type, target_y);
@@ -448,6 +497,15 @@ void xy_route_process(void)
         case XY_ROUTE_BYPASS_TO_ENTRY:
             if (xy_route_x_near_entry() != 0U)
             {
+                if ((xy_route.servo3_wait_at_entry_gate != 0U) &&
+                    (xy_route.servo3_wait_enable != 0U) &&
+                    (xy_route.servo3_wait_done == 0U))
+                {
+                    xy_route_hold_x_at_current();
+                    xy_route.servo3_wait_next_state = XY_ROUTE_BYPASS_WAIT_ENTRY_Y;
+                    xy_route.state = XY_ROUTE_SERVO_WAIT_SLOT;
+                }
+                else
                 if (xy_route_y_at_entry() != 0U)
                 {
                     xy_route_trigger_servo3_entry();
@@ -536,7 +594,18 @@ void xy_route_process(void)
                 if (servo3_path_is_arrived() != 0U)
                 {
                     xy_route.servo3_wait_done = 1U;
-                    xy_route_run_y_to(xy_route.target_y);
+                    if (xy_route.servo3_wait_next_state == XY_ROUTE_BYPASS_WAIT_ENTRY_Y)
+                    {
+                        xy_route_run_y_to(xy_route.entry_y);
+                    }
+                    else if (xy_route.servo3_wait_next_state == XY_ROUTE_CENTER_WAIT_EXIT_Y)
+                    {
+                        xy_route_run_y_to(xy_route.exit_y);
+                    }
+                    else
+                    {
+                        xy_route_run_y_to(xy_route.target_y);
+                    }
                     xy_route.state = xy_route.servo3_wait_next_state;
                 }
             }
@@ -545,6 +614,15 @@ void xy_route_process(void)
         case XY_ROUTE_CENTER_TO_EXIT:
             if (xy_route_x_past_exit() != 0U)
             {
+                if ((xy_route.servo3_wait_at_entry_gate != 0U) &&
+                    (xy_route.servo3_wait_enable != 0U) &&
+                    (xy_route.servo3_wait_done == 0U))
+                {
+                    xy_route_hold_x_at_current();
+                    xy_route.servo3_wait_next_state = XY_ROUTE_CENTER_WAIT_EXIT_Y;
+                    xy_route.state = XY_ROUTE_SERVO_WAIT_SLOT;
+                }
+                else
                 if (xy_route_y_at_exit() != 0U)
                 {
                     xy_route_trigger_servo3_exit();

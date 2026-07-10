@@ -7,9 +7,16 @@
 #include <stdio.h>
 #include <string.h>
 
+/*
+ * 启动流程：
+ * 1. 等待 START 按键。
+ * 2. 整机模式下向树莓派发送取放结果请求；底盘单测模式下直接启动固定路线。
+ * 3. 校验树莓派数据，写入 crane_route 后延时启动。
+ * 4. 路线完成后回到等待按键状态。
+ */
 #define APP_START_KEY_DEBOUNCE_MS 250U
 #if (CRANE_ROUTE_CHASSIS_ONLY == 0U)
-#define APP_START_DELAY_MS        8000U//8s
+#define APP_START_DELAY_MS        8000U  /* 收到视觉结果后等待 8s 再启动 */
 #define APP_START_PI_LINE_SIZE    128U
 #define APP_PICK_COUNT            3U
 #define APP_PLACE_COUNT           5U
@@ -17,10 +24,10 @@
 
 typedef enum
 {
-    APP_START_WAIT_KEY = 0,
-    APP_START_WAIT_PI_PACKET,
-    APP_START_DELAY_BEFORE_RUN,
-    APP_START_RUNNING
+    APP_START_WAIT_KEY = 0,        /* 等待启动按键 */
+    APP_START_WAIT_PI_PACKET,      /* 等待树莓派返回取放结果 */
+    APP_START_DELAY_BEFORE_RUN,    /* 给现场留出的启动缓冲时间 */
+    APP_START_RUNNING              /* crane_route 正在执行 */
 } app_start_state_t;
 
 static app_start_state_t app_start_state;
@@ -55,6 +62,7 @@ static uint8_t app_start_key_pressed(void)
 #if (CRANE_ROUTE_CHASSIS_ONLY == 0U)
 static void app_start_send_request(void)
 {
+    /* G = Get result，请求树莓派发送 START;PICK=...;PLACE=...;END 数据帧。 */
     uint8_t cmd = 'G';
     (void)HAL_UART_Transmit(&huart7, &cmd, 1U, 100U);
 }
@@ -119,11 +127,11 @@ static uint8_t app_start_parse_pi_packet(const char *line,
         return 0U;
     }
 
-    /* Pi sends PICK in physical order 2,3,1. Store it as indexed slots 1,2,3. */
+    /* 树莓派 PICK 顺序为实物 2,3,1；内部统一存为取货槽 1,2,3。 */
     pick_goods[0] = (uint8_t)pick2;
     pick_goods[1] = (uint8_t)pick0;
     pick_goods[2] = (uint8_t)pick1;
-    /* Pi sends PLACE in physical order 4,5,6,7,8. Store it as slots 4,5,6,7,8. */
+    /* PLACE 顺序已经是槽位 4,5,6,7,8，可直接保存。 */
     place_boxes[0] = (uint8_t)place0;
     place_boxes[1] = (uint8_t)place1;
     place_boxes[2] = (uint8_t)place2;

@@ -5,25 +5,27 @@
 
 #define CRANE_ROUTE_SLOT_COUNT  8U
 
-/* 0：未装舵机，抓取/放置仅 4 号到位后延时再抬升；1：启用舵机夹爪 */
+/* 夹爪模式：0=无舵机夹爪，仅按 dwell 时间等待；1=启用舵机夹爪。 */
 #define CRANE_ROUTE_USE_SERVO       1U
-#define CRANE_ROUTE_PICK_DWELL_MS   1000U  /* 无舵机时：升降工作位停留时间（ms） */
+#define CRANE_ROUTE_PICK_DWELL_MS   1000U  /* 无舵机夹爪时，工作位停留时间（ms） */
 
-/* 1：仅横梁按路线槽位 beam_pos 逐点走位，底盘/升降/夹爪不动作；0：整机联动 */
+/* 调试模式开关：一次只建议打开一个。 */
+/* 1=只跑横梁 Y 轴槽位，底盘/升降/夹爪不动作。 */
 #define CRANE_ROUTE_BEAM_ONLY       0U
 
-/* 1: keep chassis still, but run planned Y path with lift and servo3 coordinated. */
+/* 1=底盘 X 不动，只跑规划好的 Y/Z/servo3 协调动作。 */
 #define CRANE_ROUTE_NO_CHASSIS      0U
 
-/* 1: lift-only debug; chassis, beam and servos stay still. */
+/* 1=只调试升降 Z 轴，底盘/横梁/舵机保持不动。 */
 #define CRANE_ROUTE_LIFT_ONLY       0U
 
-/* 1: run planned route on beam(Y) only; chassis, lift and gripper stay still. */
+/* 1=按完整路线规划只跑 Y 轴，底盘/升降/夹爪不动作。 */
 #define CRANE_ROUTE_BEAM_PATH_ONLY_DEFAULT  0U
 
-/* 1: chassis-only debug, press START to run fixed chassis route without vision. */
+/* 1=底盘 X 单测，按 START 后不等视觉，直接跑固定底盘路线。 */
 #define CRANE_ROUTE_CHASSIS_ONLY    0U
 
+/* 单个槽位的三轴目标位置。slot 0 代表中心/回零点。 */
 typedef struct
 {
     float chassis_pos;
@@ -40,31 +42,31 @@ typedef enum
 
 typedef enum
 {
-    CRANE_ROUTE_IDLE = 0,
-    CRANE_ROUTE_BUILD_PLAN,
-    CRANE_ROUTE_MOVE_TO_PICK,
+    CRANE_ROUTE_IDLE = 0,              /* 空闲，等待启动 */
+    CRANE_ROUTE_BUILD_PLAN,            /* 根据抽签/默认结果生成三趟任务 */
+    CRANE_ROUTE_MOVE_TO_PICK,          /* XY 移动到取货槽 */
     CRANE_ROUTE_WAIT_PICK_XY,
-    CRANE_ROUTE_LIFT_DOWN_PICK,
+    CRANE_ROUTE_LIFT_DOWN_PICK,        /* Z 下降到取货高度 */
     CRANE_ROUTE_WAIT_LIFT_DOWN_PICK,
-    CRANE_ROUTE_GRIPPER_PICK,
+    CRANE_ROUTE_GRIPPER_PICK,          /* 夹爪抓取 */
     CRANE_ROUTE_GRIPPER_PICK_HOLD,
-    CRANE_ROUTE_LIFT_UP_AFTER_PICK,
+    CRANE_ROUTE_LIFT_UP_AFTER_PICK,    /* 抓取后抬升到安全高度 */
     CRANE_ROUTE_WAIT_LIFT_UP_AFTER_PICK,
-    CRANE_ROUTE_MOVE_TO_PLACE,
+    CRANE_ROUTE_MOVE_TO_PLACE,         /* XY 移动到放置槽 */
     CRANE_ROUTE_WAIT_PLACE_XY,
-    CRANE_ROUTE_LIFT_DOWN_PLACE,
+    CRANE_ROUTE_LIFT_DOWN_PLACE,       /* Z 下降到放置高度 */
     CRANE_ROUTE_WAIT_LIFT_DOWN_PLACE,
-    CRANE_ROUTE_GRIPPER_PLACE,
+    CRANE_ROUTE_GRIPPER_PLACE,         /* 夹爪释放 */
     CRANE_ROUTE_GRIPPER_PLACE_HOLD,
-    CRANE_ROUTE_LIFT_UP_AFTER_PLACE,
+    CRANE_ROUTE_LIFT_UP_AFTER_PLACE,   /* 放置后抬升 */
     CRANE_ROUTE_WAIT_LIFT_UP_AFTER_PLACE,
-    CRANE_ROUTE_MOVE_EXTREME_SAFE_Y,
+    CRANE_ROUTE_MOVE_EXTREME_SAFE_Y,   /* 4/8 极限槽位的 Y 安全等待 */
     CRANE_ROUTE_WAIT_EXTREME_SAFE_Y,
-    CRANE_ROUTE_SERVO_RETURN_PICK,
+    CRANE_ROUTE_SERVO_RETURN_PICK,     /* 延长杆回取货区方向 */
     CRANE_ROUTE_WAIT_SERVO_RETURN_PICK,
-    CRANE_ROUTE_RETURN_AFTER_PLACE,
+    CRANE_ROUTE_RETURN_AFTER_PLACE,    /* 空载返回下一取货槽或中心 */
     CRANE_ROUTE_WAIT_RETURN_XY,
-    CRANE_ROUTE_LEG_DWELL,
+    CRANE_ROUTE_LEG_DWELL,             /* 每趟之间的短暂停顿 */
     CRANE_ROUTE_FINISHED
 } crane_route_state_e;
 

@@ -614,6 +614,30 @@ static void crane_route_move_xy_to_slot(uint8_t slot,
 #endif
 }
 
+static void crane_route_move_xy_after_extreme_place(uint8_t slot,
+                                                     xy_route_type_e route_type,
+                                                     xy_release_mode_e release_mode,
+                                                     uint8_t extreme_slot)
+{
+#if ((CRANE_ROUTE_CHASSIS_ONLY == 0U) && (CRANE_ROUTE_BEAM_ONLY == 0U) && (CRANE_ROUTE_NO_CHASSIS == 0U) && (CRANE_ROUTE_LIFT_ONLY == 0U))
+    if (crane_route_is_beam_path_only() == 0U)
+    {
+        xy_route_start_extreme_return(crane_route_slot_pose[slot].chassis_pos,
+                                      crane_route_slot_pose[slot].beam_pos,
+                                      route_type,
+                                      release_mode,
+                                      servo3_path_safe_y_for_slot(extreme_slot),
+                                      servo3_path_angle_for_slot(slot));
+        return;
+    }
+#else
+    (void)extreme_slot;
+#endif
+
+    /* 单轴调试模式保持原有行为。 */
+    crane_route_move_xy_to_slot(slot, route_type, release_mode);
+}
+
 static uint8_t crane_route_xy_is_busy(void)
 {
 #if (CRANE_ROUTE_CHASSIS_ONLY != 0U)
@@ -673,6 +697,28 @@ static void crane_route_try_prepare_y(uint8_t target_slot, xy_route_type_e route
     if (lift_now >= (y_premove_pos - CRANE_ROUTE_Z_GATE_TOL))
     {
         crane_route_prepare_y_for_slot(target_slot, route_type);
+        crane_route.y_prepare_done = 1U;
+    }
+}
+
+static void crane_route_try_prepare_extreme_safe_y(uint8_t extreme_slot)
+{
+    float lift_now;
+    float y_premove_pos;
+
+    if (crane_route.y_prepare_done != 0U)
+    {
+        return;
+    }
+
+    lift_now = lift_ctrl_get_current_pos();
+    y_premove_pos = crane_route_slot_pose[extreme_slot].lift_work_pos +
+                    CRANE_ROUTE_Y_PREMOVE_DELTA;
+
+    if (lift_now >= (y_premove_pos - CRANE_ROUTE_Z_GATE_TOL))
+    {
+        beam_ctrl_set_target(servo3_path_safe_y_for_slot(extreme_slot));
+        beam_ctrl_start();
         crane_route.y_prepare_done = 1U;
     }
 }
@@ -1118,7 +1164,12 @@ void crane_route_process(void)
                 break;
             }
             return_slot = leg->next_pick_slot;
-            if (servo3_path_is_extreme_slot(leg->place_slot) == 0U)
+            if (servo3_path_is_extreme_slot(leg->place_slot) != 0U)
+            {
+                /* 4/8：Z 后半程与 Y 退出到旋转安全位并行。 */
+                crane_route_try_prepare_extreme_safe_y(leg->place_slot);
+            }
+            else
             {
                 crane_route_try_prepare_y(return_slot, leg->return_route);
             }
@@ -1134,7 +1185,11 @@ void crane_route_process(void)
                 if (servo3_path_is_extreme_slot(leg->place_slot) != 0U)
                 {
                     crane_route.extreme_return_slot = leg->place_slot;
-                    crane_route.state = CRANE_ROUTE_MOVE_EXTREME_SAFE_Y;
+                    /* 若 Z 先到，继续等待 Y 到极限位的旋转安全点。 */
+                    if (beam_ctrl_is_busy() == 0U)
+                    {
+                        crane_route.state = CRANE_ROUTE_RETURN_AFTER_PLACE;
+                    }
                 }
                 else
                 {
@@ -1185,9 +1240,20 @@ void crane_route_process(void)
             return_slot = leg->next_pick_slot;
             crane_route.current_slot = return_slot;
             crane_route.z_predrop_done = 0U;
-            crane_route_move_xy_to_slot(return_slot,
-                                        leg->return_route,
-                                        leg->return_release);
+            if (crane_route.extreme_return_slot != 0U)
+            {
+                crane_route_move_xy_after_extreme_place(return_slot,
+                                                        leg->return_route,
+                                                        leg->return_release,
+                                                        crane_route.extreme_return_slot);
+                crane_route.extreme_return_slot = 0U;
+            }
+            else
+            {
+                crane_route_move_xy_to_slot(return_slot,
+                                            leg->return_route,
+                                            leg->return_release);
+            }
             crane_route.state = CRANE_ROUTE_WAIT_RETURN_XY;
             break;
 

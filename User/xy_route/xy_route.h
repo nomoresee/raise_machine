@@ -5,34 +5,34 @@
 
 typedef enum
 {
-    XY_ROUTE_DIRECT = 0,
-    XY_ROUTE_UP,
-    XY_ROUTE_DOWN,
-    XY_ROUTE_CENTER,
-    XY_ROUTE_CENTER_UP_EXIT,
-    XY_ROUTE_CENTER_DOWN_EXIT
+    XY_ROUTE_DIRECT = 0,          /* X/Y 直接去目标点 */
+    XY_ROUTE_UP,                  /* 上绕障碍 */
+    XY_ROUTE_DOWN,                /* 下绕障碍 */
+    XY_ROUTE_CENTER,              /* 预留中心路线 */
+    XY_ROUTE_CENTER_UP_EXIT,      /* 从中间回中心时走上出口 */
+    XY_ROUTE_CENTER_DOWN_EXIT     /* 从中间回中心时走下出口 */
 } xy_route_type_e;
 
 typedef enum
 {
-    XY_RELEASE_AFTER_EXIT = 0,
-    XY_RELEASE_AFTER_ENTRY
+    XY_RELEASE_AFTER_EXIT = 0,    /* 到绕行出口后再放开 Y 到最终目标 */
+    XY_RELEASE_AFTER_ENTRY        /* 过绕行入口后立即放开 Y 到最终目标 */
 } xy_release_mode_e;
 
 typedef enum
 {
-    XY_ROUTE_IDLE = 0,
-    XY_ROUTE_DIRECT_RUN,
-    XY_ROUTE_BYPASS_TO_ENTRY,
-    XY_ROUTE_BYPASS_WAIT_ENTRY_Y,
-    XY_ROUTE_BYPASS_TO_EXIT,
-    XY_ROUTE_BYPASS_WAIT_EXIT_Y,
-    XY_ROUTE_BYPASS_TO_TARGET,
-    XY_ROUTE_SERVO_WAIT_SLOT,
-    XY_ROUTE_CENTER_TO_EXIT,
-    XY_ROUTE_CENTER_WAIT_EXIT_Y,
-    XY_ROUTE_CENTER_TO_TARGET,
-    XY_ROUTE_DONE
+    XY_ROUTE_IDLE = 0,            /* 空闲 */
+    XY_ROUTE_DIRECT_RUN,          /* 直线路线执行中 */
+    XY_ROUTE_BYPASS_TO_ENTRY,     /* 绕障：X 前往入口 */
+    XY_ROUTE_BYPASS_WAIT_ENTRY_Y, /* 绕障：等待 Y 到入口 */
+    XY_ROUTE_BYPASS_TO_EXIT,      /* 绕障：X/Y 前往出口 */
+    XY_ROUTE_BYPASS_WAIT_EXIT_Y,  /* 绕障：等待 Y 到出口 */
+    XY_ROUTE_BYPASS_TO_TARGET,    /* 绕障后前往最终目标 */
+    XY_ROUTE_SERVO_WAIT_SLOT,     /* 极限槽位等待 servo3 安全旋转 */
+    XY_ROUTE_CENTER_TO_EXIT,      /* 回中心路线：前往出口 */
+    XY_ROUTE_CENTER_WAIT_EXIT_Y,  /* 回中心路线：等待 Y 到出口 */
+    XY_ROUTE_CENTER_TO_TARGET,    /* 回中心路线：前往中心 */
+    XY_ROUTE_DONE                 /* 本段路线完成 */
 } xy_route_state_e;
 
 void xy_route_init(void);
@@ -41,6 +41,17 @@ void xy_route_start(float target_x,
                     float target_y,
                     xy_route_type_e route_type,
                     xy_release_mode_e release_mode);
+/*
+ * 从极限放置位返程：Y 已在 safe_y 时先放行 X。
+ * 直线段立即回转 servo3；绕障段到第一个入口/出口门限才回转，
+ * 回转完成前 Y 始终停在 safe_y。
+ */
+void xy_route_start_extreme_return(float target_x,
+                                   float target_y,
+                                   xy_route_type_e route_type,
+                                   xy_release_mode_e release_mode,
+                                   float safe_y,
+                                   float servo3_angle_deg);
 void xy_route_start_y_only(float target_y,
                            xy_route_type_e route_type,
                            xy_release_mode_e release_mode);
