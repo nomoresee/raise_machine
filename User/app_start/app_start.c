@@ -3,6 +3,7 @@
 #include "crane_route.h"
 #include "gpio.h"
 #include "pi_uart_rx.h"
+#include "tim.h"
 #include "usart.h"
 #include <stdio.h>
 #include <string.h>
@@ -15,6 +16,8 @@
  * 4. 路线完成后回到等待按键状态。
  */
 #define APP_START_KEY_DEBOUNCE_MS 250U
+#define APP_START_BUZZER_MS       1500U
+#define APP_START_BUZZER_PULSE    1000U  /* TIM12 ARR=1999，对应约 50% 占空比 */
 #if (CRANE_ROUTE_CHASSIS_ONLY == 0U)
 #define APP_START_DELAY_MS        8000U  /* 收到视觉结果后等待 8s 再启动 */
 #define APP_START_PI_LINE_SIZE    128U
@@ -33,6 +36,8 @@ typedef enum
 static app_start_state_t app_start_state;
 static uint8_t app_start_key_down;
 static uint32_t app_start_key_tick;
+static uint8_t app_start_buzzer_active;
+static uint32_t app_start_buzzer_tick;
 #if (CRANE_ROUTE_CHASSIS_ONLY == 0U)
 static uint32_t app_start_delay_tick;
 static char app_start_pi_line[APP_START_PI_LINE_SIZE];
@@ -65,6 +70,26 @@ static void app_start_send_request(void)
     /* G = Get result，请求树莓派发送 START;PICK=...;PLACE=...;END 数据帧。 */
     uint8_t cmd = 'G';
     (void)HAL_UART_Transmit(&huart7, &cmd, 1U, 100U);
+}
+
+/* 非阻塞蜂鸣：由 app_start_process() 周期调用，到时自动关闭。 */
+static void app_start_buzzer_start(void)
+{
+    (void)HAL_TIM_PWM_Start(&htim12, TIM_CHANNEL_2);
+    __HAL_TIM_SET_COMPARE(&htim12, TIM_CHANNEL_2, APP_START_BUZZER_PULSE);
+    app_start_buzzer_tick = HAL_GetTick();
+    app_start_buzzer_active = 1U;
+}
+
+static void app_start_buzzer_process(void)
+{
+    if ((app_start_buzzer_active != 0U) &&
+        ((HAL_GetTick() - app_start_buzzer_tick) >= APP_START_BUZZER_MS))
+    {
+        __HAL_TIM_SET_COMPARE(&htim12, TIM_CHANNEL_2, 0U);
+        (void)HAL_TIM_PWM_Stop(&htim12, TIM_CHANNEL_2);
+        app_start_buzzer_active = 0U;
+    }
 }
 
 static uint8_t app_start_check_unique_range(const uint8_t *values,
@@ -157,6 +182,9 @@ void app_start_init(void)
     app_start_state = APP_START_WAIT_KEY;
     app_start_key_down = 0U;
     app_start_key_tick = 0U;
+    app_start_buzzer_active = 0U;
+    app_start_buzzer_tick = 0U;
+    __HAL_TIM_SET_COMPARE(&htim12, TIM_CHANNEL_2, 0U);
 #if (CRANE_ROUTE_CHASSIS_ONLY == 0U)
     app_start_delay_tick = 0U;
     (void)memset(app_start_pi_line, 0, sizeof(app_start_pi_line));
@@ -169,6 +197,8 @@ void app_start_process(void)
     uint8_t pick_goods[APP_PICK_COUNT];
     uint8_t place_boxes[APP_PLACE_COUNT];
 #endif
+
+    app_start_buzzer_process();
 
     switch (app_start_state)
     {
@@ -193,6 +223,8 @@ void app_start_process(void)
                 {
                     if (crane_route_set_draw_result(pick_goods, place_boxes) != 0U)
                     {
+                        /* 视觉数据已完整解析、范围校验并成功写入路线。 */
+                        app_start_buzzer_start();
                         app_start_delay_tick = HAL_GetTick();
                         app_start_state = APP_START_DELAY_BEFORE_RUN;
                     }

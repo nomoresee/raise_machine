@@ -614,6 +614,11 @@ static void crane_route_move_xy_to_slot(uint8_t slot,
 #endif
 }
 
+static uint8_t crane_route_is_bypass_route(xy_route_type_e route_type)
+{
+    return ((route_type == XY_ROUTE_UP) || (route_type == XY_ROUTE_DOWN)) ? 1U : 0U;
+}
+
 static void crane_route_move_xy_after_extreme_place(uint8_t slot,
                                                      xy_route_type_e route_type,
                                                      xy_release_mode_e release_mode,
@@ -721,6 +726,27 @@ static void crane_route_try_prepare_extreme_safe_y(uint8_t extreme_slot)
         beam_ctrl_start();
         crane_route.y_prepare_done = 1U;
     }
+}
+
+/* Y 已预跑到本段目标后，也允许按原先 Z 到安全位的方式放行 X。 */
+static uint8_t crane_route_y_ready_to_release_x(void)
+{
+    if (crane_route.y_prepare_done == 0U)
+    {
+        return 0U;
+    }
+
+    return (beam_ctrl_is_busy() == 0U) ? 1U : 0U;
+}
+
+static uint8_t crane_route_x_release_ready(void)
+{
+    if (crane_route_lift_is_busy() == 0U)
+    {
+        return 1U;
+    }
+
+    return crane_route_y_ready_to_release_x();
 }
 
 static void crane_route_stop_xy(void)
@@ -1082,7 +1108,10 @@ void crane_route_process(void)
                 break;
             }
             crane_route_try_prepare_y(leg->place_slot, leg->go_route);
-            if (crane_route_lift_is_busy() == 0U)
+            /* 保留 Z 到安全位的原有放行；绕障段额外允许 Y 到入口后放行 X。 */
+            if ((crane_route_lift_is_busy() == 0U) ||
+                ((crane_route_is_bypass_route(leg->go_route) != 0U) &&
+                 (crane_route_y_ready_to_release_x() != 0U)))
             {
                 if (crane_route.y_prepare_done == 0U)
                 {
@@ -1164,7 +1193,13 @@ void crane_route_process(void)
                 break;
             }
             return_slot = leg->next_pick_slot;
-            if (servo3_path_is_extreme_slot(leg->place_slot) != 0U)
+            if ((servo3_path_is_extreme_slot(leg->place_slot) != 0U) &&
+                (crane_route_is_bypass_route(leg->return_route) != 0U))
+            {
+                /* 4/8 绕障返程：Y 直接预跑至绕障入口，而非先去旋转安全位。 */
+                crane_route_try_prepare_y(return_slot, leg->return_route);
+            }
+            else if (servo3_path_is_extreme_slot(leg->place_slot) != 0U)
             {
                 /* 4/8：Z 后半程与 Y 退出到旋转安全位并行。 */
                 crane_route_try_prepare_extreme_safe_y(leg->place_slot);
@@ -1173,7 +1208,7 @@ void crane_route_process(void)
             {
                 crane_route_try_prepare_y(return_slot, leg->return_route);
             }
-            if (crane_route_lift_is_busy() == 0U)
+            if (crane_route_x_release_ready() != 0U)
             {
                 claw_close();
                 if ((crane_route.y_prepare_done == 0U) &&
@@ -1184,11 +1219,21 @@ void crane_route_process(void)
                 }
                 if (servo3_path_is_extreme_slot(leg->place_slot) != 0U)
                 {
-                    crane_route.extreme_return_slot = leg->place_slot;
-                    /* 若 Z 先到，继续等待 Y 到极限位的旋转安全点。 */
-                    if (beam_ctrl_is_busy() == 0U)
+                    if (crane_route_is_bypass_route(leg->return_route) != 0U)
                     {
+                        /* 绕障返程已预跑到入口，走普通 XY 绕障流程。 */
+                        crane_route.extreme_return_slot = 0U;
                         crane_route.state = CRANE_ROUTE_RETURN_AFTER_PLACE;
+                    }
+                    else
+                    {
+                        crane_route.extreme_return_slot = leg->place_slot;
+                        /* 直线返程保持原极限位安全 Y/舵机流程；Y 或 Z 任一到位即可启动。 */
+                        if ((crane_route_lift_is_busy() == 0U) ||
+                            (beam_ctrl_is_busy() == 0U))
+                        {
+                            crane_route.state = CRANE_ROUTE_RETURN_AFTER_PLACE;
+                        }
                     }
                 }
                 else
