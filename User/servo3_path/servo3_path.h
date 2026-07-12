@@ -8,14 +8,14 @@
  * servo3 / 延长杆实车精调参数。
  *
  * 角度定义：
- *   0 度   -> 指向 8 号位置
- *   270 度 -> 指向取物区
+ *   0 度   -> 指向取物区
+ *   180 度 -> 指向普通放置区
  *   0 -> 270 为顺时针转动
  */
-#define SERVO3_PICK_AREA_ANGLE_DEG       270.0f
-#define SERVO3_PLACE_MID_ANGLE_DEG        90.0f
-#define SERVO3_SLOT4_ANGLE_DEG           0.0f
-#define SERVO3_SLOT8_ANGLE_DEG             180.0f
+#define SERVO3_PICK_AREA_ANGLE_DEG         0.0f
+#define SERVO3_PLACE_MID_ANGLE_DEG        180.0f
+#define SERVO3_SLOT4_ANGLE_DEG            90.0f
+#define SERVO3_SLOT8_ANGLE_DEG           270.0f
 
 /*
  * 4/8 号位置附近的 Y 轴安全等待点。

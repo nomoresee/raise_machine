@@ -4,7 +4,7 @@
 
 #define VOFA_DEBUG_MOTOR1_DIR   1.0f
 #define VOFA_DEBUG_MOTOR2_DIR  -1.0f
-#define VOFA_DEBUG_MOTOR3_DIR   1.0f
+#define VOFA_DEBUG_MOTOR3_DIR  -1.0f
 #define VOFA_DEBUG_MOTOR4_DIR   1.0f
 
 typedef struct

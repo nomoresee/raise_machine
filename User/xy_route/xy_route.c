@@ -56,6 +56,7 @@ typedef struct
     uint8_t servo3_exit_enable;
     uint8_t servo3_entry_done;
     uint8_t servo3_exit_done;
+    uint8_t servo3_entry_wait_enable;
     uint8_t servo3_wait_enable;
     uint8_t servo3_wait_done;
     uint8_t servo3_wait_at_entry_gate;
@@ -70,6 +71,7 @@ typedef struct
 {
     uint8_t entry_enable;
     uint8_t exit_enable;
+    uint8_t entry_wait_enable;
     uint8_t wait_enable;
     float entry_angle_deg;
     float exit_angle_deg;
@@ -264,6 +266,7 @@ static void xy_route_load_servo3_pending(void)
 {
     xy_route.servo3_entry_enable = xy_route_servo3_pending.entry_enable;
     xy_route.servo3_exit_enable = xy_route_servo3_pending.exit_enable;
+    xy_route.servo3_entry_wait_enable = xy_route_servo3_pending.entry_wait_enable;
     xy_route.servo3_wait_enable = xy_route_servo3_pending.wait_enable;
     xy_route.servo3_entry_angle_deg = xy_route_servo3_pending.entry_angle_deg;
     xy_route.servo3_exit_angle_deg = xy_route_servo3_pending.exit_angle_deg;
@@ -306,6 +309,46 @@ static void xy_route_run_final_y_or_wait(xy_route_state_e next_state)
 
     xy_route_run_y_to(xy_route.target_y);
     xy_route.state = next_state;
+}
+
+/* 入口第一段旋转结束后，才允许 X/Y 进入后续绕障段。 */
+static void xy_route_continue_after_entry(void)
+{
+    if (xy_route.y_only == 0U)
+    {
+        xy_route_run_x_to_target();
+    }
+
+    if (xy_route.release_mode == XY_RELEASE_AFTER_ENTRY)
+    {
+        xy_route_run_final_y_or_wait(XY_ROUTE_BYPASS_TO_TARGET);
+    }
+    else
+    {
+        xy_route_run_y_to(xy_route.exit_y);
+        xy_route.state = (xy_route.y_only != 0U) ?
+                         XY_ROUTE_BYPASS_WAIT_EXIT_Y :
+                         XY_ROUTE_BYPASS_TO_EXIT;
+    }
+}
+
+/* 4/8 放置：入口先旋到 180 度，旋转期间固定 X/Y。 */
+static void xy_route_handle_entry(void)
+{
+    xy_route_trigger_servo3_entry();
+
+    if ((xy_route.servo3_entry_wait_enable != 0U) &&
+        (servo3_path_is_arrived() == 0U))
+    {
+        if (xy_route.y_only == 0U)
+        {
+            xy_route_hold_x_at_current();
+        }
+        xy_route.state = XY_ROUTE_SERVO_WAIT_ENTRY_ROTATE;
+        return;
+    }
+
+    xy_route_continue_after_entry();
 }
 
 static void xy_route_start_common(float target_x,
@@ -393,6 +436,11 @@ void xy_route_start(float target_x,
     xy_route.state = XY_ROUTE_BYPASS_TO_ENTRY;
 }
 
+void xy_route_set_servo3_entry_wait(uint8_t enable)
+{
+    xy_route_servo3_pending.entry_wait_enable = (enable != 0U) ? 1U : 0U;
+}
+
 void xy_route_start_extreme_return(float target_x,
                                    float target_y,
                                    xy_route_type_e route_type,
@@ -402,6 +450,7 @@ void xy_route_start_extreme_return(float target_x,
 {
     /* 这一路径不使用常规入口/出口舵机触发，避免提前回转。 */
     xy_route_set_servo3_triggers(0U, 0.0f, 0U, 0.0f);
+    xy_route_set_servo3_entry_wait(0U);
     xy_route_set_servo3_target_wait(1U, safe_y, servo3_angle_deg);
     xy_route_start_common(target_x, target_y, route_type, release_mode);
     xy_route.servo3_wait_at_entry_gate = 1U;
@@ -508,16 +557,7 @@ void xy_route_process(void)
                 else
                 if (xy_route_y_at_entry() != 0U)
                 {
-                    xy_route_trigger_servo3_entry();
-                    if (xy_route.release_mode == XY_RELEASE_AFTER_ENTRY)
-                    {
-                        xy_route_run_final_y_or_wait(XY_ROUTE_BYPASS_TO_TARGET);
-                    }
-                    else
-                    {
-                        xy_route_run_y_to(xy_route.exit_y);
-                        xy_route.state = XY_ROUTE_BYPASS_TO_EXIT;
-                    }
+                    xy_route_handle_entry();
                 }
                 else
                 {
@@ -530,23 +570,7 @@ void xy_route_process(void)
         case XY_ROUTE_BYPASS_WAIT_ENTRY_Y:
             if (xy_route_y_at_entry() != 0U)
             {
-                xy_route_trigger_servo3_entry();
-                if (xy_route.y_only == 0U)
-                {
-                    xy_route_run_x_to_target();
-                }
-
-                if (xy_route.release_mode == XY_RELEASE_AFTER_ENTRY)
-                {
-                    xy_route_run_final_y_or_wait(XY_ROUTE_BYPASS_TO_TARGET);
-                }
-                else
-                {
-                    xy_route_run_y_to(xy_route.exit_y);
-                    xy_route.state = (xy_route.y_only != 0U) ?
-                                     XY_ROUTE_BYPASS_WAIT_EXIT_Y :
-                                     XY_ROUTE_BYPASS_TO_EXIT;
-                }
+                xy_route_handle_entry();
             }
             break;
 
@@ -584,6 +608,13 @@ void xy_route_process(void)
             {
                 xy_route.busy = 0U;
                 xy_route.state = XY_ROUTE_DONE;
+            }
+            break;
+
+        case XY_ROUTE_SERVO_WAIT_ENTRY_ROTATE:
+            if (servo3_path_is_arrived() != 0U)
+            {
+                xy_route_continue_after_entry();
             }
             break;
 

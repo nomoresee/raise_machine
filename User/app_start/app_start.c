@@ -1,7 +1,9 @@
 #include "app_start.h"
 
 #include "crane_route.h"
+#include "claw.h"
 #include "gpio.h"
+#include "lift_ctrl.h"
 #include "pi_uart_rx.h"
 #include "tim.h"
 #include "usart.h"
@@ -18,7 +20,14 @@
 #define APP_START_KEY_DEBOUNCE_MS 250U
 #define APP_START_BUZZER_MS       1500U
 #define APP_START_BUZZER_PULSE    1000U  /* TIM12 ARR=1999，对应约 50% 占空比 */
-#if (CRANE_ROUTE_CHASSIS_ONLY == 0U)
+#if ((CRANE_ROUTE_CHASSIS_ONLY != 0U) || \
+     (CRANE_ROUTE_BEAM_PATH_ONLY_DEFAULT != 0U))
+#define APP_START_DIRECT_ROUTE_MODE 1U
+#else
+#define APP_START_DIRECT_ROUTE_MODE 0U
+#endif
+
+#if (APP_START_DIRECT_ROUTE_MODE == 0U)
 #define APP_START_DELAY_MS        8000U  /* 收到视觉结果后等待 8s 再启动 */
 #define APP_START_PI_LINE_SIZE    128U
 #define APP_PICK_COUNT            3U
@@ -38,7 +47,24 @@ static uint8_t app_start_key_down;
 static uint32_t app_start_key_tick;
 static uint8_t app_start_buzzer_active;
 static uint32_t app_start_buzzer_tick;
-#if (CRANE_ROUTE_CHASSIS_ONLY == 0U)
+#if (CRANE_ROUTE_Z_STEP_TEST_ENABLE != 0U)
+typedef enum
+{
+    APP_Z_TEST_WAIT_FIRST_KEY = 0,
+    APP_Z_TEST_WAIT_SAFE_AFTER_FIRST,
+    APP_Z_TEST_WAIT_DROP_KEY,
+    APP_Z_TEST_WAIT_DROP,
+    APP_Z_TEST_WAIT_CLOSE_AFTER_DROP,
+    APP_Z_TEST_WAIT_SAFE_AFTER_DROP,
+    APP_Z_TEST_WAIT_PICK_KEY,
+    APP_Z_TEST_WAIT_PICK,
+    APP_Z_TEST_WAIT_OPEN_AFTER_PICK,
+    APP_Z_TEST_WAIT_SAFE_AFTER_PICK
+} app_z_test_state_t;
+
+static app_z_test_state_t app_z_test_state;
+#endif
+#if (APP_START_DIRECT_ROUTE_MODE == 0U)
 static uint32_t app_start_delay_tick;
 static char app_start_pi_line[APP_START_PI_LINE_SIZE];
 #endif
@@ -64,15 +90,119 @@ static uint8_t app_start_key_pressed(void)
     return 0U;
 }
 
-#if (CRANE_ROUTE_CHASSIS_ONLY == 0U)
+#if (APP_START_DIRECT_ROUTE_MODE == 0U)
 static void app_start_send_request(void)
 {
     /* G = Get result，请求树莓派发送 START;PICK=...;PLACE=...;END 数据帧。 */
     uint8_t cmd = 'G';
     (void)HAL_UART_Transmit(&huart7, &cmd, 1U, 100U);
 }
+#endif
 
-/* 非阻塞蜂鸣：由 app_start_process() 周期调用，到时自动关闭。 */
+#if (CRANE_ROUTE_Z_STEP_TEST_ENABLE != 0U)
+/*
+ * 独立 Z 轴步进测试：仅使用 START 键和 lift/claw。
+ * 每个运动阶段均等待实际到位，避免按键直接跳过机械动作。
+ */
+static void app_z_test_move_lift(float target_pos)
+{
+    lift_ctrl_set_target(target_pos);
+    lift_ctrl_start();
+}
+
+static void app_z_test_process(void)
+{
+    switch (app_z_test_state)
+    {
+        case APP_Z_TEST_WAIT_FIRST_KEY:
+            if (app_start_key_pressed() != 0U)
+            {
+                app_z_test_move_lift(CRANE_ROUTE_LIFT_SAFE_POS);
+                app_z_test_state = APP_Z_TEST_WAIT_SAFE_AFTER_FIRST;
+            }
+            break;
+
+        case APP_Z_TEST_WAIT_SAFE_AFTER_FIRST:
+            if (lift_ctrl_is_busy() == 0U)
+            {
+                app_z_test_state = APP_Z_TEST_WAIT_DROP_KEY;
+            }
+            break;
+
+        case APP_Z_TEST_WAIT_DROP_KEY:
+            if (app_start_key_pressed() != 0U)
+            {
+                /* 下放与张爪同时开始；两者完成后再执行闭爪。 */
+                claw_open();
+                app_z_test_move_lift(CRANE_ROUTE_Z_TEST_DROP_POS);
+                app_z_test_state = APP_Z_TEST_WAIT_DROP;
+            }
+            break;
+
+        case APP_Z_TEST_WAIT_DROP:
+            if ((lift_ctrl_is_busy() == 0U) && (claw_is_busy() == 0U))
+            {
+                claw_close_pick();
+                app_z_test_state = APP_Z_TEST_WAIT_CLOSE_AFTER_DROP;
+            }
+            break;
+
+        case APP_Z_TEST_WAIT_CLOSE_AFTER_DROP:
+            if (claw_is_busy() == 0U)
+            {
+                app_z_test_move_lift(CRANE_ROUTE_LIFT_SAFE_POS);
+                app_z_test_state = APP_Z_TEST_WAIT_SAFE_AFTER_DROP;
+            }
+            break;
+
+        case APP_Z_TEST_WAIT_SAFE_AFTER_DROP:
+            if (lift_ctrl_is_busy() == 0U)
+            {
+                app_z_test_state = APP_Z_TEST_WAIT_PICK_KEY;
+            }
+            break;
+
+        case APP_Z_TEST_WAIT_PICK_KEY:
+            if (app_start_key_pressed() != 0U)
+            {
+                app_z_test_move_lift(CRANE_ROUTE_Z_TEST_PICK_POS);
+                app_z_test_state = APP_Z_TEST_WAIT_PICK;
+            }
+            break;
+
+        case APP_Z_TEST_WAIT_PICK:
+            if (lift_ctrl_is_busy() == 0U)
+            {
+                claw_open();
+                app_z_test_state = APP_Z_TEST_WAIT_OPEN_AFTER_PICK;
+            }
+            break;
+
+        case APP_Z_TEST_WAIT_OPEN_AFTER_PICK:
+            if (claw_is_busy() == 0U)
+            {
+                app_z_test_move_lift(CRANE_ROUTE_LIFT_SAFE_POS);
+                app_z_test_state = APP_Z_TEST_WAIT_SAFE_AFTER_PICK;
+            }
+            break;
+
+        case APP_Z_TEST_WAIT_SAFE_AFTER_PICK:
+            if (lift_ctrl_is_busy() == 0U)
+            {
+                /* 一轮完成，等待下一次首按键重新开始。 */
+                app_z_test_state = APP_Z_TEST_WAIT_FIRST_KEY;
+            }
+            break;
+
+        default:
+            app_z_test_state = APP_Z_TEST_WAIT_FIRST_KEY;
+            break;
+    }
+}
+#endif
+
+/* 非阻塞蜂鸣：仅视觉启动模式使用。 */
+#if (APP_START_DIRECT_ROUTE_MODE == 0U)
 static void app_start_buzzer_start(void)
 {
     (void)HAL_TIM_PWM_Start(&htim12, TIM_CHANNEL_2);
@@ -91,7 +221,9 @@ static void app_start_buzzer_process(void)
         app_start_buzzer_active = 0U;
     }
 }
+#endif
 
+#if (APP_START_DIRECT_ROUTE_MODE == 0U)
 static uint8_t app_start_check_unique_range(const uint8_t *values,
                                             uint8_t count,
                                             uint8_t min_value,
@@ -185,7 +317,10 @@ void app_start_init(void)
     app_start_buzzer_active = 0U;
     app_start_buzzer_tick = 0U;
     __HAL_TIM_SET_COMPARE(&htim12, TIM_CHANNEL_2, 0U);
-#if (CRANE_ROUTE_CHASSIS_ONLY == 0U)
+#if (CRANE_ROUTE_Z_STEP_TEST_ENABLE != 0U)
+    app_z_test_state = APP_Z_TEST_WAIT_FIRST_KEY;
+#endif
+#if (APP_START_DIRECT_ROUTE_MODE == 0U)
     app_start_delay_tick = 0U;
     (void)memset(app_start_pi_line, 0, sizeof(app_start_pi_line));
 #endif
@@ -193,19 +328,26 @@ void app_start_init(void)
 
 void app_start_process(void)
 {
-#if (CRANE_ROUTE_CHASSIS_ONLY == 0U)
+#if (APP_START_DIRECT_ROUTE_MODE == 0U)
     uint8_t pick_goods[APP_PICK_COUNT];
     uint8_t place_boxes[APP_PLACE_COUNT];
 #endif
 
+#if (APP_START_DIRECT_ROUTE_MODE == 0U)
     app_start_buzzer_process();
+#endif
+
+#if (CRANE_ROUTE_Z_STEP_TEST_ENABLE != 0U)
+    app_z_test_process();
+    return;
+#endif
 
     switch (app_start_state)
     {
         case APP_START_WAIT_KEY:
             if (app_start_key_pressed() != 0U)
             {
-#if (CRANE_ROUTE_CHASSIS_ONLY != 0U)
+#if (APP_START_DIRECT_ROUTE_MODE != 0U)
                 crane_route_start();
                 app_start_state = APP_START_RUNNING;
 #else
@@ -215,7 +357,7 @@ void app_start_process(void)
             }
             break;
 
-#if (CRANE_ROUTE_CHASSIS_ONLY == 0U)
+#if (APP_START_DIRECT_ROUTE_MODE == 0U)
         case APP_START_WAIT_PI_PACKET:
             if (pi_uart_rx_take_new_line(app_start_pi_line, sizeof(app_start_pi_line)) != 0U)
             {

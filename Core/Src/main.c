@@ -63,7 +63,7 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 static float pos_target = 200.0f;
-static float pos_vel = 2.0f;
+static float pos_vel = 1.5f;
 static float beam_vel = 1.2f;
 static float lift_vel = 30.0f;
 
@@ -194,7 +194,7 @@ int main(void)
   lift_ctrl_set_max_vel(lift_vel);
   xy_route_init();
   crane_route_init();
-#if (CRANE_ROUTE_LIFT_ONLY != 0U)
+#if ((CRANE_ROUTE_LIFT_ONLY != 0U) || (CRANE_ROUTE_Z_STEP_TEST_ENABLE != 0U))
   xy_route_stop();
   pos_pid_sync_stop();
   beam_ctrl_stop();

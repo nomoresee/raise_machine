@@ -4,7 +4,7 @@
 #define BEAM_CTRL_REACH_TOL        1.2f
 #define BEAM_CTRL_REACH_HOLD_MS    80U
 #define BEAM_CTRL_DEFAULT_MAX_VEL  1.0f
-#define BEAM_CTRL_DIR              1.0f
+#define BEAM_CTRL_DIR             -1.0f  /* 横梁电机装反，统一翻转控制与反馈正方向 */
 #define BEAM_CTRL_POS_RATIO        (1.0f / 30.0f)
 #define BEAM_CTRL_DECEL_RANGE      12.0f
 #define BEAM_CTRL_SETTLE_TOL       0.05f

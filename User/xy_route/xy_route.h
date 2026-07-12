@@ -28,6 +28,7 @@ typedef enum
     XY_ROUTE_BYPASS_TO_EXIT,      /* 绕障：X/Y 前往出口 */
     XY_ROUTE_BYPASS_WAIT_EXIT_Y,  /* 绕障：等待 Y 到出口 */
     XY_ROUTE_BYPASS_TO_TARGET,    /* 绕障后前往最终目标 */
+    XY_ROUTE_SERVO_WAIT_ENTRY_ROTATE, /* 入口处等待 servo3 第一阶段旋转 */
     XY_ROUTE_SERVO_WAIT_SLOT,     /* 极限槽位等待 servo3 安全旋转 */
     XY_ROUTE_CENTER_TO_EXIT,      /* 回中心路线：前往出口 */
     XY_ROUTE_CENTER_WAIT_EXIT_Y,  /* 回中心路线：等待 Y 到出口 */
@@ -57,6 +58,7 @@ void xy_route_start_y_only(float target_y,
                            xy_release_mode_e release_mode);
 void xy_route_set_servo3_triggers(uint8_t entry_enable, float entry_angle_deg,
                                   uint8_t exit_enable, float exit_angle_deg);
+void xy_route_set_servo3_entry_wait(uint8_t enable);
 void xy_route_set_servo3_target_wait(uint8_t enable, float wait_y, float angle_deg);
 void xy_route_stop(void);
 void xy_route_process(void);
