@@ -28,10 +28,17 @@
 #endif
 
 #if (APP_START_DIRECT_ROUTE_MODE == 0U)
-#define APP_START_DELAY_MS        8000U  /* 收到视觉结果后等待 8s 再启动 */
 #define APP_START_PI_LINE_SIZE    128U
 #define APP_PICK_COUNT            3U
 #define APP_PLACE_COUNT           5U
+#if (APP_START_MANUAL_DRAW_MODE != 0U)
+/* 保持与树莓派实际回传完全相同的帧格式与 PICK 排序语义。 */
+#define APP_START_MANUAL_DRAW_PACKET \
+    "START;PICK=7,6,8;PLACE=5,3,1,2,4;END"
+#define APP_START_DELAY_MS        APP_START_BUZZER_MS
+#else
+#define APP_START_DELAY_MS        8000U  /* 收到视觉结果后等待 8s 再启动 */
+#endif
 #endif
 
 typedef enum
@@ -90,7 +97,8 @@ static uint8_t app_start_key_pressed(void)
     return 0U;
 }
 
-#if (APP_START_DIRECT_ROUTE_MODE == 0U)
+#if ((APP_START_DIRECT_ROUTE_MODE == 0U) && \
+     (APP_START_MANUAL_DRAW_MODE == 0U))
 static void app_start_send_request(void)
 {
     /* G = Get result，请求树莓派发送 START;PICK=...;PLACE=...;END 数据帧。 */
@@ -201,7 +209,7 @@ static void app_z_test_process(void)
 }
 #endif
 
-/* 非阻塞蜂鸣：仅视觉启动模式使用。 */
+/* 非阻塞蜂鸣：视觉启动和手动视觉结果测试模式共用。 */
 #if (APP_START_DIRECT_ROUTE_MODE == 0U)
 static void app_start_buzzer_start(void)
 {
@@ -350,6 +358,22 @@ void app_start_process(void)
 #if (APP_START_DIRECT_ROUTE_MODE != 0U)
                 crane_route_start();
                 app_start_state = APP_START_RUNNING;
+#elif (APP_START_MANUAL_DRAW_MODE != 0U)
+                /*
+                 * 复用真实视觉包的解析、范围校验和路线写入流程，
+                 * 确保手动模式与比赛模式的路线含义一致。
+                 */
+                if (app_start_parse_pi_packet(APP_START_MANUAL_DRAW_PACKET,
+                                              pick_goods,
+                                              place_boxes) != 0U)
+                {
+                    if (crane_route_set_draw_result(pick_goods, place_boxes) != 0U)
+                    {
+                        app_start_buzzer_start();
+                        app_start_delay_tick = HAL_GetTick();
+                        app_start_state = APP_START_DELAY_BEFORE_RUN;
+                    }
+                }
 #else
                 app_start_send_request();
                 app_start_state = APP_START_WAIT_PI_PACKET;

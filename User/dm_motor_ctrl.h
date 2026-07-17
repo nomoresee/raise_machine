@@ -12,6 +12,8 @@ extern uint32_t motor4_data_sent;
 
 extern motor_t motor[num];
 
+#define DM_MOTOR_FEEDBACK_AGE_INVALID  0xFFFFFFFFU
+
 typedef union
 {
 	float f_val;
@@ -23,6 +25,8 @@ void dm_motor_init(void);
 
 void read_all_motor_data(motor_t *motor);
 void receive_motor_data(motor_t *motor, uint8_t *data);
+uint8_t dm_motor_feedback_is_valid(motor_num motor_index);
+uint32_t dm_motor_feedback_age_ms(motor_num motor_index);
 
 #endif /* __DM_MOTOR_CTRL_H__ */
 

@@ -2,6 +2,20 @@
 
 motor_t motor[num];
 
+static volatile uint8_t motor_feedback_valid[num];
+static volatile uint32_t motor_feedback_tick_ms[num];
+
+static void dm_motor_mark_feedback(motor_num motor_index)
+{
+	if ((motor_index < Motor1) || (motor_index >= num))
+	{
+		return;
+	}
+
+	motor_feedback_tick_ms[motor_index] = HAL_GetTick();
+	motor_feedback_valid[motor_index] = 1U;
+}
+
 
 /**
 ************************************************************************
@@ -21,6 +35,8 @@ void dm_motor_init(void)
 	memset(&motor[Motor4], 0, sizeof(motor[Motor4]));
 	memset(&motor[Motor5], 0, sizeof(motor[Motor5]));
 	memset(&motor[Motor6], 0, sizeof(motor[Motor6]));
+	memset((void *)motor_feedback_valid, 0, sizeof(motor_feedback_valid));
+	memset((void *)motor_feedback_tick_ms, 0, sizeof(motor_feedback_tick_ms));
 
 	// 设置Motor1的电机信�?
 	motor[Motor1].id = 0x01;
@@ -74,6 +90,55 @@ void dm_motor_init(void)
 	motor[Motor4].tmp.PMAX		= 12.5f;
 	motor[Motor4].tmp.VMAX		= 60.0f;
 	motor[Motor4].tmp.TMAX		= 10.0f;
+
+	motor[Motor5].id = 0x05;
+	motor[Motor5].mst_id = 0x15;
+	motor[Motor5].tmp.read_flag = 1;
+	motor[Motor5].ctrl.mode 	= pos_mode;
+	motor[Motor5].ctrl.vel_set 	= 0.0f;
+	motor[Motor5].ctrl.pos_set 	= 0.0f;
+	motor[Motor5].ctrl.tor_set 	= 0.0f;
+	motor[Motor5].ctrl.cur_set 	= 0.0f;
+	motor[Motor5].ctrl.kd_set 	= 1.0f;
+	motor[Motor5].tmp.PMAX		= 12.5f;
+	motor[Motor5].tmp.VMAX		= 60.0f;
+	motor[Motor5].tmp.TMAX		= 10.0f;
+
+	motor[Motor6].id = 0x06;
+	motor[Motor6].mst_id = 0x16;
+	motor[Motor6].tmp.read_flag = 1;
+	motor[Motor6].ctrl.mode 	= pos_mode;
+	motor[Motor6].ctrl.vel_set 	= 0.0f;
+	motor[Motor6].ctrl.pos_set 	= 0.0f;
+	motor[Motor6].ctrl.tor_set 	= 0.0f;
+	motor[Motor6].ctrl.cur_set 	= 0.0f;
+	motor[Motor6].ctrl.kd_set 	= 1.0f;
+	motor[Motor6].tmp.PMAX		= 12.5f;
+	motor[Motor6].tmp.VMAX		= 60.0f;
+	motor[Motor6].tmp.TMAX		= 10.0f;
+}
+
+uint8_t dm_motor_feedback_is_valid(motor_num motor_index)
+{
+	if ((motor_index < Motor1) || (motor_index >= num))
+	{
+		return 0U;
+	}
+
+	return motor_feedback_valid[motor_index];
+}
+
+uint32_t dm_motor_feedback_age_ms(motor_num motor_index)
+{
+	uint32_t last_tick;
+
+	if (dm_motor_feedback_is_valid(motor_index) == 0U)
+	{
+		return DM_MOTOR_FEEDBACK_AGE_INVALID;
+	}
+
+	last_tick = motor_feedback_tick_ms[motor_index];
+	return HAL_GetTick() - last_tick;
 }
 /**
 ************************************************************************
@@ -231,21 +296,37 @@ void fdcan1_rx_callback(void)
             case 0x11:
                 dm_motor_fbdata(&motor[Motor1], rx_data);
                 receive_motor_data(&motor[Motor1], rx_data);
+                dm_motor_mark_feedback(Motor1);
                 break;
 
             case 0x12:
                 dm_motor_fbdata(&motor[Motor2], rx_data);
                 receive_motor_data(&motor[Motor2], rx_data);
+                dm_motor_mark_feedback(Motor2);
                 break;
 
             case 0x13:
                 dm_motor_fbdata(&motor[Motor3], rx_data);
                 receive_motor_data(&motor[Motor3], rx_data);
+                dm_motor_mark_feedback(Motor3);
                 break;
 
             case 0x14:
                 dm_motor_fbdata(&motor[Motor4], rx_data);
                 receive_motor_data(&motor[Motor4], rx_data);
+                dm_motor_mark_feedback(Motor4);
+                break;
+
+            case 0x15:
+                dm_motor_fbdata(&motor[Motor5], rx_data);
+                receive_motor_data(&motor[Motor5], rx_data);
+                dm_motor_mark_feedback(Motor5);
+                break;
+
+            case 0x16:
+                dm_motor_fbdata(&motor[Motor6], rx_data);
+                receive_motor_data(&motor[Motor6], rx_data);
+                dm_motor_mark_feedback(Motor6);
                 break;
 
             default:

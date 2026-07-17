@@ -31,7 +31,8 @@ static float servo3_path_clamp_angle(float angle_deg)
     return angle_deg;
 }
 
-static uint32_t servo3_path_estimate_settle_ms(float from_angle_deg, float to_angle_deg)
+static uint32_t servo3_path_estimate_settle_ms(float from_angle_deg,
+                                                float to_angle_deg)
 {
     float delta = servo3_path_absf(to_angle_deg - from_angle_deg);
     float speed = SERVO3_ROTATE_SPEED_DEG_PER_SEC;
@@ -43,24 +44,24 @@ static uint32_t servo3_path_estimate_settle_ms(float from_angle_deg, float to_an
     }
 
     settle_ms = (delta * 1000.0f) / speed;
-    return (uint32_t)(settle_ms + 0.5f);
+    return (uint32_t)(settle_ms + 0.5f) + SERVO3_SETTLE_MARGIN_MS;
 }
 
 void servo3_path_init(void)
 {
     memset(&servo3_path, 0, sizeof(servo3_path));
-    servo3_path.current_angle_deg = SERVO3_PICK_AREA_ANGLE_DEG;
-    servo3_path.target_angle_deg = SERVO3_PICK_AREA_ANGLE_DEG;
+
+    /* 上电默认朝向置物区。 */
+    servo3_path.current_angle_deg = SERVO3_PLACE_DEFAULT_ANGLE_DEG;
+    servo3_path.target_angle_deg = SERVO3_PLACE_DEFAULT_ANGLE_DEG;
     servo3_path.command_tick = HAL_GetTick();
-    servo3_path.settle_ms = 0U;
     servo3_path.initialized = 1U;
-    servo3_set_angle(SERVO3_PICK_AREA_ANGLE_DEG);
+    servo3_set_angle(SERVO3_PLACE_DEFAULT_ANGLE_DEG);
 }
 
 void servo3_path_release_angle(float angle_deg)
 {
     float target = servo3_path_clamp_angle(angle_deg);
-    float current;
 
     if (servo3_path.initialized == 0U)
     {
@@ -72,15 +73,16 @@ void servo3_path_release_angle(float angle_deg)
         servo3_path.current_angle_deg = servo3_path.target_angle_deg;
     }
 
-    if (servo3_path_absf(target - servo3_path.target_angle_deg) <= SERVO3_ANGLE_TOL_DEG)
+    if (servo3_path_absf(target - servo3_path.target_angle_deg) <=
+        SERVO3_ANGLE_TOL_DEG)
     {
         return;
     }
 
-    current = servo3_path.current_angle_deg;
+    servo3_path.settle_ms =
+        servo3_path_estimate_settle_ms(servo3_path.current_angle_deg, target);
     servo3_path.target_angle_deg = target;
     servo3_path.command_tick = HAL_GetTick();
-    servo3_path.settle_ms = servo3_path_estimate_settle_ms(current, target);
     servo3_set_angle(target);
 }
 
@@ -89,22 +91,47 @@ void servo3_path_release_pick_area(void)
     servo3_path_release_angle(SERVO3_PICK_AREA_ANGLE_DEG);
 }
 
-void servo3_path_release_for_slot(uint8_t slot)
+float servo3_path_place_angle_for_pick(uint8_t pick_slot)
 {
-    servo3_path_release_angle(servo3_path_angle_for_slot(slot));
+    switch (pick_slot)
+    {
+        case 1U:
+            return SERVO3_PICK1_PLACE_ANGLE_DEG;
+
+        case 2U:
+            return SERVO3_PICK2_PLACE_ANGLE_DEG;
+
+        case 3U:
+            return SERVO3_PICK3_PLACE_ANGLE_DEG;
+
+        default:
+            return SERVO3_PLACE_DEFAULT_ANGLE_DEG;
+    }
+}
+
+void servo3_path_release_place_for_pick(uint8_t pick_slot)
+{
+    servo3_path_release_angle(servo3_path_place_angle_for_pick(pick_slot));
+}
+
+void servo3_path_release_pick_from_place(uint8_t pick_slot)
+{
+    /*
+     * 绝对角度命令会自然沿原路径返回：270 -> 135 或 0 -> 135。
+     * pick_slot 保留在接口中，用于明确这次返回属于哪条旋转路径。
+     */
+    (void)pick_slot;
+    servo3_path_release_pick_area();
 }
 
 uint8_t servo3_path_is_arrived(void)
 {
-    uint32_t now_tick;
-
     if (servo3_path.initialized == 0U)
     {
-        return 1U;
+        return 0U;
     }
 
-    now_tick = HAL_GetTick();
-    if ((now_tick - servo3_path.command_tick) >= servo3_path.settle_ms)
+    if ((HAL_GetTick() - servo3_path.command_tick) >= servo3_path.settle_ms)
     {
         servo3_path.current_angle_deg = servo3_path.target_angle_deg;
         return 1U;
@@ -113,47 +140,13 @@ uint8_t servo3_path_is_arrived(void)
     return 0U;
 }
 
-uint8_t servo3_path_is_extreme_slot(uint8_t slot)
+float servo3_path_get_current_angle(void)
 {
-    return ((slot == 4U) || (slot == 8U)) ? 1U : 0U;
+    (void)servo3_path_is_arrived();
+    return servo3_path.current_angle_deg;
 }
 
-float servo3_path_angle_for_slot(uint8_t slot)
+float servo3_path_get_target_angle(void)
 {
-    if ((slot >= 1U) && (slot <= 3U))
-    {
-        return SERVO3_PICK_AREA_ANGLE_DEG;
-    }
-
-    if (slot == 4U)
-    {
-        return SERVO3_SLOT4_ANGLE_DEG;
-    }
-
-    if (slot == 8U)
-    {
-        return SERVO3_SLOT8_ANGLE_DEG;
-    }
-
-    if ((slot >= 5U) && (slot <= 7U))
-    {
-        return SERVO3_PLACE_MID_ANGLE_DEG;
-    }
-
-    return SERVO3_PICK_AREA_ANGLE_DEG;
-}
-
-float servo3_path_safe_y_for_slot(uint8_t slot)
-{
-    if (slot == 4U)
-    {
-        return SERVO3_SLOT4_SAFE_Y;
-    }
-
-    if (slot == 8U)
-    {
-        return SERVO3_SLOT8_SAFE_Y;
-    }
-
-    return 0.0f;
+    return servo3_path.target_angle_deg;
 }

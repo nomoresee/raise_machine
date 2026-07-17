@@ -63,7 +63,7 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 static float pos_target = 200.0f;
-static float pos_vel = 1.5f;
+static float pos_vel = 1.0f;
 static float beam_vel = 1.2f;
 static float lift_vel = 30.0f;
 
@@ -137,6 +137,8 @@ int main(void)
   motor[Motor2].ctrl.mode = pos_mode;
   motor[Motor3].ctrl.mode = pos_mode;
   motor[Motor4].ctrl.mode = pos_mode;
+  motor[Motor5].ctrl.mode = pos_mode;
+  motor[Motor6].ctrl.mode = pos_mode;
 
   dm_motor_disable(&hfdcan1, &motor[Motor1]);
   HAL_Delay(30);
@@ -145,6 +147,10 @@ int main(void)
   dm_motor_disable(&hfdcan1, &motor[Motor3]);
   HAL_Delay(30);
   dm_motor_disable(&hfdcan1, &motor[Motor4]);
+  HAL_Delay(30);
+  dm_motor_disable(&hfdcan1, &motor[Motor5]);
+  HAL_Delay(30);
+  dm_motor_disable(&hfdcan1, &motor[Motor6]);
   HAL_Delay(50);
 
   dm_motor_clear_err(&hfdcan1, &motor[Motor1]);
@@ -154,6 +160,10 @@ int main(void)
   dm_motor_clear_err(&hfdcan1, &motor[Motor3]);
   HAL_Delay(30);
   dm_motor_clear_err(&hfdcan1, &motor[Motor4]);
+  HAL_Delay(30);
+  dm_motor_clear_err(&hfdcan1, &motor[Motor5]);
+  HAL_Delay(30);
+  dm_motor_clear_err(&hfdcan1, &motor[Motor6]);
   HAL_Delay(50);
 
   save_pos_zero(&hfdcan1, motor[Motor1].id, POS_MODE);
@@ -163,6 +173,10 @@ int main(void)
   save_pos_zero(&hfdcan1, motor[Motor3].id, POS_MODE);
   HAL_Delay(150);
   save_pos_zero(&hfdcan1, motor[Motor4].id, POS_MODE);
+  HAL_Delay(150);
+  save_pos_zero(&hfdcan1, motor[Motor5].id, POS_MODE);
+  HAL_Delay(150);
+  save_pos_zero(&hfdcan1, motor[Motor6].id, POS_MODE);
   HAL_Delay(200);
 
   dm_motor_clear_err(&hfdcan1, &motor[Motor1]);
@@ -172,6 +186,10 @@ int main(void)
   dm_motor_clear_err(&hfdcan1, &motor[Motor3]);
   HAL_Delay(30);
   dm_motor_clear_err(&hfdcan1, &motor[Motor4]);
+  HAL_Delay(30);
+  dm_motor_clear_err(&hfdcan1, &motor[Motor5]);
+  HAL_Delay(30);
+  dm_motor_clear_err(&hfdcan1, &motor[Motor6]);
   HAL_Delay(50);
 
   dm_motor_enable(&hfdcan1, &motor[Motor1]);
@@ -181,6 +199,10 @@ int main(void)
   dm_motor_enable(&hfdcan1, &motor[Motor3]);
   HAL_Delay(30);
   dm_motor_enable(&hfdcan1, &motor[Motor4]);
+  HAL_Delay(30);
+  dm_motor_enable(&hfdcan1, &motor[Motor5]);
+  HAL_Delay(30);
+  dm_motor_enable(&hfdcan1, &motor[Motor6]);
   HAL_Delay(50);
 
 ////////电机同步操作。
@@ -190,22 +212,28 @@ int main(void)
   pos_pid_sync_set_max_vel(pos_vel);
   beam_ctrl_init(&hfdcan1, Motor3);
   beam_ctrl_set_max_vel(beam_vel);
+  upper_hopper_y_ctrl_init(&hfdcan1, Motor5);
+  upper_hopper_y_ctrl_set_max_vel(beam_vel);
+  lower_hopper_y_ctrl_init(&hfdcan1, Motor6);
+  lower_hopper_y_ctrl_set_max_vel(beam_vel);
   lift_ctrl_init(&hfdcan1, Motor4);
   lift_ctrl_set_max_vel(lift_vel);
-  xy_route_init();
   crane_route_init();
 #if ((CRANE_ROUTE_LIFT_ONLY != 0U) || (CRANE_ROUTE_Z_STEP_TEST_ENABLE != 0U))
-  xy_route_stop();
   pos_pid_sync_stop();
   beam_ctrl_stop();
+  upper_hopper_y_ctrl_stop();
+  lower_hopper_y_ctrl_stop();
 #endif
-  vofa_debug_init(Motor1, Motor2, Motor3, Motor4);
+  vofa_debug_init(Motor1, Motor2, Motor3, Motor4, Motor5, Motor6);
 //////舵机初始化定时器
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
   claw_init();
   servo3_path_init();
+  upper_hopper_gate_init();
+  lower_hopper_gate_init();
 
 
 
@@ -220,16 +248,19 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-//     // lcd_app_update();
+    // lcd_app_update();
     motor_angle_update_all();//-12.5->12.5
     app_start_process();
 // #if (CRANE_ROUTE_LIFT_ONLY == 0U)
-    xy_route_process();
     pos_pid_sync_process();
     beam_ctrl_process();
+    upper_hopper_y_ctrl_process();
+    lower_hopper_y_ctrl_process();
 // #endif
     lift_ctrl_process();
     claw_process();
+    upper_hopper_gate_process();
+    lower_hopper_gate_process();
     vofa_debug_process();
 
   //  servo3_set_angle(0.0f);

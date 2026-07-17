@@ -332,7 +332,7 @@ static void xy_route_continue_after_entry(void)
     }
 }
 
-/* 4/8 放置：入口先旋到 180 度，旋转期间固定 X/Y。 */
+/* 4/8 放置：入口先旋到 0 度过渡位，旋转期间固定 X/Y。 */
 static void xy_route_handle_entry(void)
 {
     xy_route_trigger_servo3_entry();
