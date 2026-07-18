@@ -1,7 +1,7 @@
 #include "headfile.h"
 
 #define LIFT_CTRL_PERIOD_MS        10U
-#define LIFT_CTRL_REACH_TOL        0.2f
+#define LIFT_CTRL_REACH_TOL        0.5f
 #define LIFT_CTRL_REACH_HOLD_MS    80U
 #define LIFT_CTRL_DEFAULT_MAX_VEL  10.8f
 #define LIFT_CTRL_DIR              1.0f

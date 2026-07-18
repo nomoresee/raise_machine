@@ -1,4 +1,5 @@
 #include "headfile.h"
+#include "xy_route/xy_route.h"
 
 /* 豆子编号与视觉箱号的既有对应关系。 */
 #define CRANE_ROUTE_GOODS_GREEN               6U
@@ -14,13 +15,13 @@
 #define CRANE_ROUTE_PICK_BOX_CLEARANCE        5.8f
 #define CRANE_ROUTE_Z_TOL                      1.0f
 
-/*
- * 新统一上绕路径的三个 X 门槛。数值先继承旧坐标系作为首版占位，
- * 实车必须分别标定“障碍1前50 / 障碍2前100 / 障碍2后50”。
- */
-#define CRANE_ROUTE_X_OBS1_PRE_50           -750.0f
-#define CRANE_ROUTE_X_OBS2_PRE_100           500.0f
-#define CRANE_ROUTE_X_OBS2_POST_50           750.0f
+/* 避障门槛由 xy_route 统一标定的两处障碍物坐标推导，避免重复维护。 */
+#define CRANE_ROUTE_X_OBS1_PRE_50 \
+    (XY_ROUTE_X_ENTRY_PICK_SIDE + 50.0f)
+#define CRANE_ROUTE_X_OBS2_PRE_100 \
+    (XY_ROUTE_X_ENTRY_PLACE_SIDE - 100.0f)
+#define CRANE_ROUTE_X_OBS2_POST_50 \
+    (XY_ROUTE_X_ENTRY_PLACE_SIDE + 50.0f)
 
 /* 两类放置 X：4/8 先在外侧站释放，其余在内侧站释放。 */
 #define CRANE_ROUTE_X_EXTREME_STATION       1015.0f
