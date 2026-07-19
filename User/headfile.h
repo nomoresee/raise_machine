@@ -35,5 +35,6 @@
 #include "pi_uart/pi_uart_rx.h"
 #include "vofa_debug/vofa_debug.h"
 #include "app_start/app_start.h"
+#include "debug_step.h"
 
 #endif

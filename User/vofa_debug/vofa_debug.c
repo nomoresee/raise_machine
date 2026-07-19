@@ -1,6 +1,8 @@
 #include "headfile.h"
 
-#define VOFA_DEBUG_PRINT_MS     200U
+#define VOFA_DEBUG_PRINT_MS       200U
+/* 单步调试需要观察 10 ms 控制环内的速度变化，独立提高到 20 ms。 */
+#define VOFA_DEBUG_STEP_PRINT_MS   20U
 
 #define VOFA_DEBUG_MOTOR1_DIR   1.0f
 #define VOFA_DEBUG_MOTOR2_DIR  -1.0f
@@ -23,6 +25,7 @@ typedef struct
 } vofa_debug_t;
 
 static vofa_debug_t vofa_debug;
+static uint32_t vofa_debug_step_print_tick;
 
 static float vofa_debug_absf(float value)
 {
@@ -148,6 +151,31 @@ void vofa_debug_process(void)
            (unsigned long)vofa_debug.snapshot.motor6_feedback_age_ms,
            (unsigned int)vofa_debug.snapshot.route_state,
            (unsigned int)vofa_debug.snapshot.route_fault);
+}
+
+void vofa_debug_step_process(uint8_t motor_select,
+                             float actual_pos,
+                             float target_pos,
+                             float feedback_motor_vel,
+                             float command_motor_vel)
+{
+    uint32_t now_ms = HAL_GetTick();
+
+    /* motor_select 已由调试模块校验；保留该参数便于调用处明确当前输出对象。 */
+    (void)motor_select;
+
+    if ((now_ms - vofa_debug_step_print_tick) < VOFA_DEBUG_STEP_PRINT_MS)
+    {
+        return;
+    }
+    vofa_debug_step_print_tick = now_ms;
+
+    /* VOFA ASCII：实际位置、目标位置、反馈速度、下发速度上限。 */
+    printf("%.3f,%.3f,%.3f,%.3f\r\n",
+           (double)actual_pos,
+           (double)target_pos,
+           (double)feedback_motor_vel,
+           (double)command_motor_vel);
 }
 
 uint8_t vofa_debug_get_snapshot(vofa_debug_snapshot_t *out)

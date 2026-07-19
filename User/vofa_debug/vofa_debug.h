@@ -37,6 +37,23 @@ void vofa_debug_init(motor_num motor1_index,
                      motor_num motor5_index,
                      motor_num motor6_index);
 void vofa_debug_process(void);
+
+/**
+ * @brief 单步调试专用 VOFA 输出。
+ * @param motor_select 当前调试选择号，仅用于调用端语义。
+ * @param actual_pos 由 motor_angle_get() 展开得到的实际机构位置。
+ * @param target_pos 当前单步调试的机构目标位置。
+ * @param feedback_motor_vel 当前选中电机的速度反馈绝对值，单位为电机侧速度单位。
+ * @param command_motor_vel 当前下发给该电机位置模式的速度上限，单位为电机侧速度单位。
+ * @note USART1 每 200 ms 输出一行：
+ *       actual_pos,target_pos,feedback_motor_vel,command_motor_vel\r\n。
+ *       在 VOFA 中依次对应实际位置、目标位置、实际速度、速度指令。
+ */
+void vofa_debug_step_process(uint8_t motor_select,
+                             float actual_pos,
+                             float target_pos,
+                             float feedback_motor_vel,
+                             float command_motor_vel);
 uint8_t vofa_debug_get_snapshot(vofa_debug_snapshot_t *out);
 
 #endif /* __VOFA_DEBUG_H__ */

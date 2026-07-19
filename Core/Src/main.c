@@ -65,7 +65,8 @@ void SystemClock_Config(void);
 static float pos_target = 200.0f;
 static float pos_vel = 1.0f;
 static float beam_vel = 1.2f;
-static float lift_vel = 30.0f;
+/* 升降控制器使用输出端速度单位；30:1 减速后 1.0 会下发为电机侧 30.0。 */
+static float lift_vel = 1.0f;
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
@@ -89,7 +90,7 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-   HAL_Init();
+  HAL_Init();
 
   /* USER CODE BEGIN Init */
 
@@ -123,7 +124,9 @@ int main(void)
   HAL_Delay(50);
   delay_init(480);
 
+#if (DEBUG_STEP_MODE_ENABLE == 0U)
   lcd_app_init();
+#endif
 
   HAL_ADCEx_Calibration_Start(&hadc1, ADC_CALIB_OFFSET, ADC_SINGLE_ENDED);
   HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc_val, 1);
@@ -241,6 +244,9 @@ int main(void)
 
   pi_uart_rx_init();
   app_start_init();
+#if (DEBUG_STEP_MODE_ENABLE != 0U)
+  debug_step_init();
+#endif
 
   /* USER CODE END 2 */
 
@@ -248,9 +254,13 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    // lcd_app_update();
     motor_angle_update_all();//-12.5->12.5
+#if (DEBUG_STEP_MODE_ENABLE != 0U)
+    debug_step_process();
+#else
+    lcd_app_update();
     app_start_process();
+#endif
 // #if (CRANE_ROUTE_LIFT_ONLY == 0U)
     pos_pid_sync_process();
     beam_ctrl_process();
@@ -261,7 +271,11 @@ int main(void)
     claw_process();
     upper_hopper_gate_process();
     lower_hopper_gate_process();
+#if (DEBUG_STEP_MODE_ENABLE != 0U)
+    debug_step_vofa_process();
+#else
     vofa_debug_process();
+#endif
 
   //  servo3_set_angle(0.0f);
   //  HAL_Delay(2000);
