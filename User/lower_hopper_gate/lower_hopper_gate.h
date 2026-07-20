@@ -10,8 +10,8 @@
  *
  * 实物舵机的 PWM 通道、开合角度未确定前，不得将 HW_READY 改为 1。
  */
-#define LOWER_HOPPER_GATE_HW_READY             0U
-#define LOWER_HOPPER_GATE_SIMULATION_ENABLE     1U
+#define LOWER_HOPPER_GATE_HW_READY             1U
+#define LOWER_HOPPER_GATE_SIMULATION_ENABLE     0U
 
 /* 待实车标定的占位参数。 */
 #define LOWER_HOPPER_GATE_CLOSE_ANGLE_DEG        0.0f

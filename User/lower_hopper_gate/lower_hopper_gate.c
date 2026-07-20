@@ -1,6 +1,7 @@
 #include "lower_hopper_gate.h"
 
 #include "main.h"
+#include "servo.h"
 #include <string.h>
 
 typedef struct
@@ -51,7 +52,8 @@ static uint32_t lower_hopper_gate_estimate_settle_ms(float from_angle_deg,
  */
 static void lower_hopper_gate_hw_write_angle(float angle_deg)
 {
-    (void)angle_deg;
+    /* PE14 -> TIM1_CH4 */
+    servo_set_angle(&htim1, TIM_CHANNEL_4, angle_deg);
 }
 
 static void lower_hopper_gate_set_target(float target_angle_deg)

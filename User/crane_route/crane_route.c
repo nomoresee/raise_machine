@@ -11,9 +11,9 @@
 #define CRANE_ROUTE_LIFT_PICK_2_POS           4.2f
 #define CRANE_ROUTE_LIFT_PICK_3_POS          10.5f
 #define CRANE_ROUTE_LIFT_PLACE_POS            2.5f
-#define CRANE_ROUTE_PICK_APPROACH_CLEARANCE   8.0f
-#define CRANE_ROUTE_PICK_BOX_CLEARANCE        5.8f
-#define CRANE_ROUTE_Z_TOL                      1.0f
+#define CRANE_ROUTE_PICK_APPROACH_CLEARANCE   8.0f//安全接近高度--目标位置+高度
+#define CRANE_ROUTE_PICK_BOX_CLEARANCE        5.8f//脱盒高度，代表夹爪超过目标位置+脱盒高度爪子的就可以移动
+#define CRANE_ROUTE_Z_TOL                      1.0f//到位容忍值
 
 /* 避障门槛由 xy_route 统一标定的两处障碍物坐标推导，避免重复维护。 */
 #define CRANE_ROUTE_X_OBS1_PRE_50 \
@@ -24,31 +24,56 @@
     (XY_ROUTE_X_ENTRY_PLACE_SIDE + 50.0f)
 
 /* 两类放置 X：4/8 先在外侧站释放，其余在内侧站释放。 */
-#define CRANE_ROUTE_X_EXTREME_STATION       1015.0f
-#define CRANE_ROUTE_X_REMAINING_STATION     1103.5f
+#define CRANE_ROUTE_X_EXTREME_STATION       1015.0f//4，8号放置位置
+#define CRANE_ROUTE_X_REMAINING_STATION     1103.5f//5,6,7号放置位置
 
 /*
  * 三套 Y 坐标必须独立标定。斗子上电时放在两侧机械安全位并保存零点，
  * 所以第一版斗子停放位为 0；其余数值只用于验证状态机和低速空载联调。
  */
+/* 取物阶段料斗停放 Y：两只料斗保持收回，避免进入夹爪取物工作区。 */
 #define CRANE_ROUTE_UPPER_HOPPER_STOW_Y        0.0f
 #define CRANE_ROUTE_LOWER_HOPPER_STOW_Y        0.0f
+
+/*
+ * 夹爪向料斗转交物料时的 Y 位置。
+ * 若当前物料由上料斗承接，夹爪移动到 LOAD_UPPER_Y；
+ * 若由下料斗承接，则移动到 LOAD_LOWER_Y。
+ */
 #define CRANE_ROUTE_CLAW_LOAD_UPPER_Y         -25.0f
 #define CRANE_ROUTE_CLAW_LOAD_LOWER_Y          25.0f
 
-#define CRANE_ROUTE_CLAW_UPPER_SAFE_Y          -8.0f
+/*
+ * 通过第一个 X 向障碍物前，三套 Y 机构共同采用的“上侧安全通道”坐标。
+ * 三轴必须全部到位后，底盘才允许继续向放置区运动。
+ */
+#define CRANE_ROUTE_CLAW_UPPER_SAFE_Y          -8.0f//三个的上侧安全通道坐标
 #define CRANE_ROUTE_UPPER_UPPER_SAFE_Y         -8.0f
 #define CRANE_ROUTE_LOWER_UPPER_SAFE_Y         -8.0f
-#define CRANE_ROUTE_CLAW_LOWER_TRANS_Y           8.0f
+
+/*
+ * 底盘接近第二个 X 向障碍物时，三套 Y 机构切换到“下侧过渡通道”坐标。
+ * 若 Y 轴未及时到位，路线会暂停 X 轴，等待三套机构全部进入该安全位置。
+ */
+#define CRANE_ROUTE_CLAW_LOWER_TRANS_Y           8.0f//三个的下侧过渡通道坐标
 #define CRANE_ROUTE_UPPER_LOWER_TRANS_Y          8.0f
 #define CRANE_ROUTE_LOWER_LOWER_TRANS_Y          8.0f
 
+/* 电机反馈超过此时间未更新，立即判定总线/电机反馈失效并停机。 */
 #define CRANE_ROUTE_FEEDBACK_TIMEOUT_MS        250U
+/* 夹爪和旋转舵机在规定时间内未到位时的超时保护。 */
 #define CRANE_ROUTE_SERVO_TIMEOUT_MS         10000U
+/* X、三套 Y、Z 任一位置动作的最大允许持续时间。 */
 #define CRANE_ROUTE_MOTION_TIMEOUT_MS       120000U
+/* 上、下料斗门从接到开门命令到完成关门的最大允许时间。 */
 #define CRANE_ROUTE_GATE_TIMEOUT_MS          10000U
-#define CRANE_ROUTE_GATE_RELEASE_HOLD_MS       500U
+/* 料门确认打开后保持的放料时间，达到后自动发送关门命令。 */
+#define CRANE_ROUTE_GATE_RELEASE_HOLD_MS      1200U
 
+/*
+ * 放料完成位图：上料斗、夹爪、下料斗各占一个 bit。
+ * 状态机用该位图支持两端工位先放料、其余工位后放料的并行/分步流程。
+ */
 #define CRANE_RELEASE_UPPER_MASK              0x01U
 #define CRANE_RELEASE_CLAW_MASK               0x02U
 #define CRANE_RELEASE_LOWER_MASK              0x04U
@@ -111,17 +136,17 @@ static crane_slot_pose_t crane_route_slot_pose[CRANE_ROUTE_SLOT_COUNT + 1U] =
 static float crane_route_upper_place_y[CRANE_ROUTE_SLOT_COUNT + 1U] =
 {
     0.0f, 0.0f, 0.0f, 0.0f, -24.10f, -12.70f, 0.10f, 0.0f, 0.0f
-};
+};//上料斗的放置Y坐标（只有4，5，6号位置）
 
 static float crane_route_claw_place_y[CRANE_ROUTE_SLOT_COUNT + 1U] =
 {
     0.0f, 0.0f, 0.0f, 0.0f, 0.0f, -12.70f, 0.10f, 13.30f, 0.0f
-};
+};//上料斗的放置Y坐标（只有5，6，7号位置）
 
 static float crane_route_lower_place_y[CRANE_ROUTE_SLOT_COUNT + 1U] =
 {
     0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.10f, 13.30f, 25.15f
-};
+};//上料斗的放置Y坐标（只有6，7，8号位置）
 
 static crane_route_t crane_route;
 
@@ -514,6 +539,35 @@ static float crane_route_pick_box_clear_z(uint8_t slot)
     return clear;
 }
 
+/*
+ * 放置后夹爪的脱盒高度：先完全离开目标盒，再允许夹爪闭合并回避障位。
+ * 使用与取物相同的脱盒余量，并限制在 Z 轴全局安全高度以下。
+ */
+static float crane_route_place_box_clear_z(uint8_t slot)
+{
+    float clear = crane_route_slot_pose[slot].lift_work_pos +
+                  CRANE_ROUTE_PICK_BOX_CLEARANCE;
+
+    if (clear > crane_route_slot_pose[slot].lift_safe_pos)
+    {
+        clear = crane_route_slot_pose[slot].lift_safe_pos;
+    }
+    return clear;
+}
+
+/* 放置区先停在目标上方的接近高度；X/Y 全到位后才允许继续下放。 */
+static float crane_route_place_approach_z(uint8_t slot)
+{
+    float approach = crane_route_slot_pose[slot].lift_work_pos +
+                     CRANE_ROUTE_PICK_APPROACH_CLEARANCE;
+
+    if (approach > crane_route_slot_pose[slot].lift_safe_pos)
+    {
+        approach = crane_route_slot_pose[slot].lift_safe_pos;
+    }
+    return approach;
+}
+
 static crane_carrier_e crane_route_carrier_for_pick(uint8_t pick_slot)
 {
     if (pick_slot == crane_route.plan.upper.pick_slot)
@@ -598,7 +652,8 @@ static void crane_route_move_all_place_y(void)
         crane_route_claw_place_y[crane_route.plan.claw.place_slot]);
     crane_route_move_lower_y(
         crane_route_lower_place_y[crane_route.plan.lower.place_slot]);
-    crane_route_move_z(crane_route_slot_pose[crane_route.plan.claw.place_slot].lift_work_pos);
+    crane_route_move_z(
+        crane_route_place_approach_z(crane_route.plan.claw.place_slot));
 }
 
 static uint8_t crane_route_extreme_mask(void)
@@ -1124,10 +1179,25 @@ void crane_route_process(void)
                 remaining_gate_mask = (uint8_t)((~crane_route.release_mask) &
                     (CRANE_RELEASE_UPPER_MASK | CRANE_RELEASE_LOWER_MASK));
                 crane_route_start_gate_cycle(remaining_gate_mask);
-                if ((crane_route.release_mask & CRANE_RELEASE_CLAW_MASK) == 0U)
-                {
-                    claw_open();
-                }
+                crane_route_enter_state(CRANE_ROUTE_PLACE_DESCEND);
+            }
+            else if (crane_route_state_timed_out(CRANE_ROUTE_MOTION_TIMEOUT_MS) != 0U)
+            {
+                crane_route_fault_from_wait();
+            }
+            break;
+
+        /* X/三套 Y 以及 Z 接近高度均到位后，夹爪才下到真实放置高度。 */
+        case CRANE_ROUTE_PLACE_DESCEND:
+            crane_route_move_z(
+                crane_route_slot_pose[crane_route.plan.claw.place_slot].lift_work_pos);
+            crane_route_enter_state(CRANE_ROUTE_WAIT_PLACE_DESCEND);
+            break;
+
+        case CRANE_ROUTE_WAIT_PLACE_DESCEND:
+            if (crane_route_z_arrived() != 0U)
+            {
+                claw_open();
                 crane_route_enter_state(CRANE_ROUTE_WAIT_REMAINING_RELEASE);
             }
             else if (crane_route_state_timed_out(CRANE_ROUTE_MOTION_TIMEOUT_MS) != 0U)
@@ -1155,13 +1225,17 @@ void crane_route_process(void)
             break;
 
         case CRANE_ROUTE_LIFT_RETURN_CLEAR:
-            crane_route_move_z(CRANE_ROUTE_LIFT_SAFE_POS);
+            crane_route_move_z(
+                crane_route_place_box_clear_z(crane_route.plan.claw.place_slot));
             crane_route_enter_state(CRANE_ROUTE_WAIT_LIFT_RETURN_CLEAR);
             break;
 
         case CRANE_ROUTE_WAIT_LIFT_RETURN_CLEAR:
             if (crane_route_z_arrived() != 0U)
             {
+                /* 脱盒完成后再闭爪；随后 Y 回避障位和 Z 回全局安全高度可并行。 */
+                claw_close();
+                crane_route_move_z(CRANE_ROUTE_LIFT_SAFE_POS);
                 crane_route_enter_state(CRANE_ROUTE_MOVE_ALL_RETURN_UPPER);
             }
             else if (crane_route_state_timed_out(CRANE_ROUTE_MOTION_TIMEOUT_MS) != 0U)
@@ -1176,7 +1250,9 @@ void crane_route_process(void)
             break;
 
         case CRANE_ROUTE_WAIT_ALL_RETURN_UPPER:
-            if (crane_route_all_y_arrived() != 0U)
+            if ((crane_route_all_y_arrived() != 0U) &&
+                (crane_route_z_arrived() != 0U) &&
+                (claw_is_closed() != 0U))
             {
                 crane_route_enter_state(CRANE_ROUTE_RETURN_X_CENTER);
             }

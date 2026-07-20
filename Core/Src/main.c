@@ -237,6 +237,8 @@ int main(void)
   servo3_path_init();
   upper_hopper_gate_init();
   lower_hopper_gate_init();
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);  /* PA2: upper hopper gate */
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);  /* PE14: lower hopper gate */
 
 
 
