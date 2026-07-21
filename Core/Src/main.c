@@ -259,7 +259,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    motor_angle_update_all();//-12.5->12.5
+    motor_angle_update_all();
 #if (CHASSIS_DEBUG_MODE != 0U)
     chassis_debug_process();
     pos_pid_sync_process();
@@ -270,7 +270,6 @@ int main(void)
     beam_ctrl_process();
     upper_hopper_y_ctrl_process();
     lower_hopper_y_ctrl_process();
-// #endif
     lift_ctrl_process();
     claw_process();
     upper_hopper_gate_process();
@@ -289,10 +288,9 @@ int main(void)
     lower_hopper_gate_process();
     vofa_debug_process();
 #endif
-
-  //  servo3_set_angle(0.0f);
+  // servo3_set_angle(0.0f);
   //  HAL_Delay(2000);
-  //   servo3_set_angle(180.0f);
+  //   servo3_set_angle(135.0f);
   //   HAL_Delay(4000);
   }
     /* USER CODE END WHILE */

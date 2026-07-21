@@ -9,7 +9,7 @@
  * 0：关闭底盘自动调试，恢复其它运行模式。
  */
 #ifndef CHASSIS_DEBUG_MODE
-#define CHASSIS_DEBUG_MODE 1U
+#define CHASSIS_DEBUG_MODE 0U
 #endif
 
 void chassis_debug_init(hcan_t *hcan);

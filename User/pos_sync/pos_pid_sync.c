@@ -62,11 +62,6 @@ typedef struct
     pid_para_t pos_pid;
     pid_para_t balance_pid;
     pid_para_t vel_pid;
-
-    float track_m1;
-    float track_m2;
-    uint32_t track_ms;
-    uint8_t track_inited;
 } pos_pid_sync_t;
 
 static pos_pid_sync_t pos_pid_sync;
@@ -232,7 +227,6 @@ void pos_pid_sync_start(void)
     pos_pid_sync.busy = 1U;
     pos_pid_sync.arrived = 0U;
     pos_pid_sync.reach_tick = HAL_GetTick();
-    pos_pid_sync.track_inited = 0U;
 }
 
 void pos_pid_sync_stop(void)
@@ -240,7 +234,6 @@ void pos_pid_sync_stop(void)
     pos_pid_sync.enabled = 0U;
     pos_pid_sync.busy = 0U;
     pos_pid_sync.arrived = 1U;
-    pos_pid_sync.track_inited = 0U;
 }
 
 uint8_t pos_pid_sync_is_busy(void)
@@ -436,34 +429,16 @@ void pos_pid_sync_process(void)
 
     motor1_pos = POS_PID_SYNC_MOTOR1_DIR * motor_angle_get(pos_pid_sync.motor1_index); // 读取电机 1 位置，并用方向系数统一正方向。
     motor2_pos = POS_PID_SYNC_MOTOR2_DIR * motor_angle_get(pos_pid_sync.motor2_index); // 读取电机 2 位置，并用方向系数统一正方向。
-    motor1_vel = POS_PID_SYNC_MOTOR1_DIR * motor1->para.vel; // 驱动器反馈速度（仅作备用，avg_vel 优先用几何速度）
+    motor1_vel = POS_PID_SYNC_MOTOR1_DIR * motor1->para.vel;
     motor2_vel = POS_PID_SYNC_MOTOR2_DIR * motor2->para.vel;
     avg_pos = 0.5f * (motor1_pos + motor2_pos); // 计算平均位置，用于判断整体距离目标位置还有多远。
-    if (pos_pid_sync.track_inited == 0U)
-    {
-        pos_pid_sync.track_m1 = motor1_pos;
-        pos_pid_sync.track_m2 = motor2_pos;
-        pos_pid_sync.track_ms = now_tick;
-        pos_pid_sync.track_inited = 1U;
-        avg_vel = 0.5f * (pos_pid_sync_absf(motor1_vel) + pos_pid_sync_absf(motor2_vel));
-    }
-    else
-    {
-        float dt_trk = ((float)(now_tick - pos_pid_sync.track_ms)) * 0.001f;
-        if (dt_trk < 0.0005f)
-        {
-            avg_vel = 0.5f * (pos_pid_sync_absf(motor1_vel) + pos_pid_sync_absf(motor2_vel));
-        }
-        else
-        {
-            float g1 = (motor1_pos - pos_pid_sync.track_m1) / dt_trk;
-            float g2 = (motor2_pos - pos_pid_sync.track_m2) / dt_trk;
-            avg_vel = 0.5f * (pos_pid_sync_absf(g1) + pos_pid_sync_absf(g2));
-        }
-        pos_pid_sync.track_m1 = motor1_pos;
-        pos_pid_sync.track_m2 = motor2_pos;
-        pos_pid_sync.track_ms = now_tick;
-    }
+    /*
+     * 直接使用两台 3519 的速度反馈，避免以 10 ms 多圈位置差分估速。
+     * CAN 位置反馈并非严格等周期到达；差分估速会产生 0/尖峰交替，导致
+     * 速度 PID 提前、反复收紧速度。位置坐标和下发速度 ×30 均保持原样。
+     */
+    avg_vel = 0.5f * (pos_pid_sync_absf(motor1_vel) +
+                      pos_pid_sync_absf(motor2_vel));
     target_error = pos_pid_sync.target_pos - avg_pos;
     sync_error = motor1_pos - motor2_pos;
 

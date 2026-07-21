@@ -64,6 +64,9 @@ static float debug_step_absf(float value)
     return (value >= 0.0f) ? value : -value;
 }
 
+#define DEBUG_STEP_CHASSIS_MOTOR1_DIR  1.0f
+#define DEBUG_STEP_CHASSIS_MOTOR2_DIR -1.0f
+
 static void debug_step_stop_all_axes(void)
 {
     pos_pid_sync_stop();
@@ -386,6 +389,24 @@ void debug_step_vofa_process(void)
                                    motor[Motor2].ctrl.pos_set,
                                    motor[Motor2].para.vel,
                                    motor[Motor2].ctrl.vel_set);
+        return;
+    }
+
+    if (debug_step.active_select == DEBUG_STEP_CHASSIS_X)
+    {
+        /*
+         * 底盘调试专用 8 通道；两台电机均转换到统一的底盘正方向，
+         * 便于直接比较实际位置、控制器最终目标、反馈速度与速度上限。
+         */
+        vofa_debug_chassis_process(
+            DEBUG_STEP_CHASSIS_MOTOR1_DIR * motor_angle_get(Motor1),
+            DEBUG_STEP_CHASSIS_MOTOR1_DIR * motor[Motor1].ctrl.pos_set,
+            DEBUG_STEP_CHASSIS_MOTOR1_DIR * motor[Motor1].para.vel,
+            motor[Motor1].ctrl.vel_set,
+            DEBUG_STEP_CHASSIS_MOTOR2_DIR * motor_angle_get(Motor2),
+            DEBUG_STEP_CHASSIS_MOTOR2_DIR * motor[Motor2].ctrl.pos_set,
+            DEBUG_STEP_CHASSIS_MOTOR2_DIR * motor[Motor2].para.vel,
+            motor[Motor2].ctrl.vel_set);
         return;
     }
 
