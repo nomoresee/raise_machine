@@ -36,5 +36,6 @@
 #include "vofa_debug/vofa_debug.h"
 #include "app_start/app_start.h"
 #include "debug_step.h"
+#include "chassis_debug.h"
 
 #endif

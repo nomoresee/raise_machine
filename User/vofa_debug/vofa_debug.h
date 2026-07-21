@@ -54,6 +54,37 @@ void vofa_debug_step_process(uint8_t motor_select,
                              float target_pos,
                              float feedback_motor_vel,
                              float command_motor_vel);
+
+/**
+ * @brief 底盘双电机单步调试专用 VOFA 输出。
+ * @note USART1 每 20 ms 输出一行八个浮点数，顺序为：
+ *       M1实际位置、M1目标位置、M1反馈速度、M1下发速度、
+ *       M2实际位置、M2目标位置、M2反馈速度、M2下发速度。
+ *       均为电机原始坐标；Motor2 未做方向翻转，方便直接对应 CAN ID 2。
+ */
+void vofa_debug_chassis_process(float motor1_actual_pos,
+                                float motor1_target_pos,
+                                float motor1_feedback_vel,
+                                float motor1_command_vel,
+                                float motor2_actual_pos,
+                                float motor2_target_pos,
+                                float motor2_feedback_vel,
+                                float motor2_command_vel);
+
+/**
+ * @brief 底盘自动调试的精简 VOFA 输出。
+ * @note USART1 每 20 ms 输出：
+ *       M1实际位置,M1实际速度,M1目标位置,M1下发速度,
+ *       M2实际位置,M2实际速度,M2目标位置,M2下发速度。
+ */
+void vofa_debug_chassis_feedback_process(float motor1_actual_pos,
+                                         float motor1_feedback_vel,
+                                         float motor1_target_pos,
+                                         float motor1_command_vel,
+                                         float motor2_actual_pos,
+                                         float motor2_feedback_vel,
+                                         float motor2_target_pos,
+                                         float motor2_command_vel);
 uint8_t vofa_debug_get_snapshot(vofa_debug_snapshot_t *out);
 
 #endif /* __VOFA_DEBUG_H__ */

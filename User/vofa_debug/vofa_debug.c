@@ -178,6 +178,62 @@ void vofa_debug_step_process(uint8_t motor_select,
            (double)command_motor_vel);
 }
 
+void vofa_debug_chassis_process(float motor1_actual_pos,
+                                float motor1_target_pos,
+                                float motor1_feedback_vel,
+                                float motor1_command_vel,
+                                float motor2_actual_pos,
+                                float motor2_target_pos,
+                                float motor2_feedback_vel,
+                                float motor2_command_vel)
+{
+    uint32_t now_ms = HAL_GetTick();
+
+    if ((now_ms - vofa_debug_step_print_tick) < VOFA_DEBUG_STEP_PRINT_MS)
+    {
+        return;
+    }
+    vofa_debug_step_print_tick = now_ms;
+
+    printf("%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\r\n",
+           (double)motor1_actual_pos,
+           (double)motor1_target_pos,
+           (double)motor1_feedback_vel,
+           (double)motor1_command_vel,
+           (double)motor2_actual_pos,
+           (double)motor2_target_pos,
+           (double)motor2_feedback_vel,
+           (double)motor2_command_vel);
+}
+
+void vofa_debug_chassis_feedback_process(float motor1_actual_pos,
+                                         float motor1_feedback_vel,
+                                         float motor1_target_pos,
+                                         float motor1_command_vel,
+                                         float motor2_actual_pos,
+                                         float motor2_feedback_vel,
+                                         float motor2_target_pos,
+                                         float motor2_command_vel)
+{
+    uint32_t now_ms = HAL_GetTick();
+
+    if ((now_ms - vofa_debug_step_print_tick) < VOFA_DEBUG_STEP_PRINT_MS)
+    {
+        return;
+    }
+    vofa_debug_step_print_tick = now_ms;
+
+    printf("%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\r\n",
+           (double)motor1_actual_pos,
+           (double)motor1_feedback_vel,
+           (double)motor1_target_pos,
+           (double)motor1_command_vel,
+           (double)motor2_actual_pos,
+           (double)motor2_feedback_vel,
+           (double)motor2_target_pos,
+           (double)motor2_command_vel);
+}
+
 uint8_t vofa_debug_get_snapshot(vofa_debug_snapshot_t *out)
 {
     if ((out == NULL) || (vofa_debug.snapshot.valid == 0U))

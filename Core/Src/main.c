@@ -124,7 +124,7 @@ int main(void)
   HAL_Delay(50);
   delay_init(480);
 
-#if (DEBUG_STEP_MODE_ENABLE == 0U)
+#if ((DEBUG_STEP_MODE_ENABLE == 0U) && (CHASSIS_DEBUG_MODE == 0U))
   lcd_app_init();
 #endif
 
@@ -244,10 +244,13 @@ int main(void)
 
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, GPIO_PIN_SET);
 
+  #if (CHASSIS_DEBUG_MODE != 0U)
+  chassis_debug_init(&hfdcan1);
+#elif (DEBUG_STEP_MODE_ENABLE != 0U)
+  debug_step_init();
+#else
   pi_uart_rx_init();
   app_start_init();
-#if (DEBUG_STEP_MODE_ENABLE != 0U)
-  debug_step_init();
 #endif
 
   /* USER CODE END 2 */
@@ -257,13 +260,12 @@ int main(void)
   while (1)
   {
     motor_angle_update_all();//-12.5->12.5
-#if (DEBUG_STEP_MODE_ENABLE != 0U)
+#if (CHASSIS_DEBUG_MODE != 0U)
+    chassis_debug_process();
+    pos_pid_sync_process();
+    chassis_debug_vofa_process();
+#elif (DEBUG_STEP_MODE_ENABLE != 0U)
     debug_step_process();
-#else
-    lcd_app_update();
-    app_start_process();
-#endif
-// #if (CRANE_ROUTE_LIFT_ONLY == 0U)
     pos_pid_sync_process();
     beam_ctrl_process();
     upper_hopper_y_ctrl_process();
@@ -273,9 +275,18 @@ int main(void)
     claw_process();
     upper_hopper_gate_process();
     lower_hopper_gate_process();
-#if (DEBUG_STEP_MODE_ENABLE != 0U)
     debug_step_vofa_process();
 #else
+    lcd_app_update();
+    app_start_process();
+    pos_pid_sync_process();
+    beam_ctrl_process();
+    upper_hopper_y_ctrl_process();
+    lower_hopper_y_ctrl_process();
+    lift_ctrl_process();
+    claw_process();
+    upper_hopper_gate_process();
+    lower_hopper_gate_process();
     vofa_debug_process();
 #endif
 

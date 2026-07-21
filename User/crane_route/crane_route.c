@@ -1348,6 +1348,16 @@ uint8_t crane_route_set_carrier_place_y(crane_carrier_e carrier,
     return 0U;
 }
 
+float crane_route_get_slot_chassis_pos(uint8_t slot)
+{
+    if ((slot == 0U) || (slot > CRANE_ROUTE_SLOT_COUNT))
+    {
+        return 0.0f;
+    }
+
+    return crane_route_slot_pose[slot].chassis_pos;
+}
+
 void crane_route_get_current_target(float *x, float *y)
 {
     if (x != NULL)

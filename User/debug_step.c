@@ -32,7 +32,7 @@
  * debug_step_direction：+1 为机构正方向，-1 为机构反方向；长按 3~6 秒可切换。
  * 长按至少 6 秒后松开：所选机构自动回到坐标 0，不会改写电机内部零点。
  */
-uint8_t debug_step_motor_select = (uint8_t)DEBUG_STEP_CLAW_Z;
+uint8_t debug_step_motor_select = DEBUG_STEP_CHASSIS_X ;
 float debug_step_coarse_distance = 2.0f;
 float debug_step_fine_distance = 100.0f;
 int8_t debug_step_direction = 1;
@@ -361,8 +361,31 @@ void debug_step_process(void)
 
 void debug_step_vofa_process(void)
 {
-    if ((debug_step.initialized == 0U) || (debug_step.target_initialized == 0U))
+    /*
+     * 串口遥测不能等待 CAN 反馈完成才启动。否则任一底盘电机未反馈时，
+     * target_initialized 始终为 0，VOFA 看起来会完全没有输出。
+     * 电机反馈到来前仍输出当前缓存值，便于先确认串口链路与反馈状态。
+     */
+    if (debug_step.initialized == 0U)
     {
+        return;
+    }
+
+    /*
+     * 底盘双电机必须分开观察：这里直接读取 motor[] 中刚由
+     * pos_pid_sync_send() 保存并发送的 ctrl.pos_set / ctrl.vel_set，
+     * 不使用公共目标或两电机平均值，便于定位不同步、丢反馈等问题。
+     */
+    if (debug_step.active_select == DEBUG_STEP_CHASSIS_X)
+    {
+        vofa_debug_chassis_process(motor_angle_get(Motor1),
+                                   motor[Motor1].ctrl.pos_set,
+                                   motor[Motor1].para.vel,
+                                   motor[Motor1].ctrl.vel_set,
+                                   motor_angle_get(Motor2),
+                                   motor[Motor2].ctrl.pos_set,
+                                   motor[Motor2].para.vel,
+                                   motor[Motor2].ctrl.vel_set);
         return;
     }
 

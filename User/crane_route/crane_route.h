@@ -122,6 +122,7 @@ void crane_route_set_slot_lift_pos(uint8_t slot,
 uint8_t crane_route_set_carrier_place_y(crane_carrier_e carrier,
                                         uint8_t slot,
                                         float y_pos);
+float crane_route_get_slot_chassis_pos(uint8_t slot);
 
 void crane_route_get_current_target(float *x, float *y);
 void crane_route_get_current_pose_target(float *x, float *y, float *z);

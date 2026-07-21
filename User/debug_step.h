@@ -9,7 +9,7 @@
  * 1：单步调试模式，START 按键由 debug_step_process() 使用。
  */
 #ifndef DEBUG_STEP_MODE_ENABLE
-#define DEBUG_STEP_MODE_ENABLE 1U
+#define DEBUG_STEP_MODE_ENABLE 0U
 #endif
 
 /*
@@ -64,8 +64,10 @@ void debug_step_init(void);
 void debug_step_process(void);
 
 /**
- * @brief 输出单步调试 VOFA 数据到 USART1。
- * @note 每行有四个通道：实际多圈位置、目标位置、反馈电机速度、下发速度上限。
+ * @brief 输出底盘 Motor1/Motor2 单步调试数据到 USART1。
+ * @note 底盘模式每行有八个通道，顺序为：
+ *       M1实际位置、M1目标位置、M1反馈速度、M1下发速度、
+ *       M2实际位置、M2目标位置、M2反馈速度、M2下发速度。
  */
 void debug_step_vofa_process(void);
 
