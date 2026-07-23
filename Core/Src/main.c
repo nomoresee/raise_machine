@@ -63,7 +63,7 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 static float pos_target = 200.0f;
-static float pos_vel = 1.0f;
+static float pos_vel = 2.0f;
 static float beam_vel = 1.2f;
 /* 升降控制器使用输出端速度单位；30:1 减速后 1.0 会下发为电机侧 30.0。 */
 static float lift_vel = 1.0f;

@@ -23,27 +23,35 @@
 #define POS_PID_SYNC_BAL_OUT_MAX     0.8f
 #define POS_PID_SYNC_BAL_OUT_MIN    -0.8f
 
-#define POS_PID_SYNC_VEL_KP          0.2f//速度给定环，根据位置误差和当前速度算下发速度
+#define POS_PID_SYNC_VEL_KP          0.4f//位置误差转换为连续速度上限的比例
 #define POS_PID_SYNC_VEL_KI          0.0f
 #define POS_PID_SYNC_VEL_KD          0.0f
 #define POS_PID_SYNC_VEL_OUT_MAX     40.0f
 #define POS_PID_SYNC_VEL_OUT_MIN     0.5f
+/*
+ * 底盘的位置坐标保持 motor_angle_get() 的原始多圈单位，不做 1:30 缩放。
+ * 因此速度规划内部虽然仍使用“输出速度”配置值，但真正发给 3519 的速度
+ * 必须限制在其电机侧 VMAX(45)以内；42 留出通信、量化及负载波动余量。
+ */
 #define POS_PID_SYNC_VEL_CMD_RATIO   30.0f
+#define POS_PID_SYNC_MOTOR_VEL_MAX   42.0f
 
 #define POS_PID_SYNC_SM_DWELL_MS     2000U
-#define POS_PID_SYNC_SM_REACH_TOL    5.0f
-#define POS_PID_SYNC_REACH_TOL       5.0f
-#define POS_PID_SYNC_SYNC_REACH_TOL  2.0f
+#define POS_PID_SYNC_SM_REACH_TOL    0.10f
+#define POS_PID_SYNC_REACH_TOL       0.10f
+#define POS_PID_SYNC_SYNC_REACH_TOL  0.05f
 #define POS_PID_SYNC_REACH_HOLD_MS   80U
-#define POS_PID_SYNC_SETTLE_TOL      1.0f
-#define POS_PID_SYNC_SYNC_DEADBAND   0.8f
+#define POS_PID_SYNC_SETTLE_TOL      0.10f
+#define POS_PID_SYNC_SYNC_DEADBAND   0.05f
 #define POS_PID_SYNC_HOLD_VEL        0.0f
+/* 位置已进入死区但电机仍在运动时，不能立刻将位置模式速度清零。 */
+#define POS_PID_SYNC_STOP_VEL_TOL    0.50f
 
 /* === 到位减速坡道：|err| < DECEL_RANGE 时，cmd_vel 上限按距离线性收缩到 0，
  *     再叠加按当前速度可停下的距离约束，避免过冲震荡 === */
-#define POS_PID_SYNC_DECEL_RANGE     120.0f   /* 减速带宽度（与 motor_angle 位置单位一致） */
-#define POS_PID_SYNC_DECEL_MIN_VEL   0.30f   /* 接近目标但未进入 SETTLE 时的最小限速，避免趴下 */
-#define POS_PID_SYNC_DECEL_ACCEL     80.0f   /* 等效减速度（输出轴速度单位/秒），用于按 v^2/2a 估剩余距 */
+#define POS_PID_SYNC_DECEL_RANGE     480.0f  /* 电机侧位置单位；按本次实测滑行距离提前进入制动 */
+#define POS_PID_SYNC_DECEL_MIN_VEL   0.03f   /* 乘 30 后为 0.9，贴近目标不再以 9 的上限持续冲击 */
+#define POS_PID_SYNC_DECEL_ACCEL     3.0f    /* 电机侧等效减速度(速度单位/s)，用于 v^2/(2a) 制动距离 */
 
 typedef struct
 {
@@ -147,6 +155,11 @@ static void pos_pid_sync_send(motor_t *motor_ptr, float pos, float output_vel)
     float output_vel_limit = pos_pid_sync_clampf(output_vel, 0.0f, pos_pid_sync.max_output_vel);
     float motor_cmd_vel = output_vel_limit * POS_PID_SYNC_VEL_CMD_RATIO;
 
+    /* 3519 的反馈 VMAX 为 45。禁止向位置模式发送 60 这类越界速度上限。 */
+    motor_cmd_vel = pos_pid_sync_clampf(motor_cmd_vel,
+                                        0.0f,
+                                        POS_PID_SYNC_MOTOR_VEL_MAX);
+
     motor_ptr->ctrl.mode = pos_mode;
     motor_ptr->ctrl.pos_set = pos;
     motor_ptr->ctrl.vel_set = motor_cmd_vel;
@@ -213,6 +226,11 @@ void pos_pid_sync_init(hcan_t *hcan, motor_num motor1_index, motor_num motor2_in
 **/
 void pos_pid_sync_set_target(float target_pos)
 {
+    /*
+     * 单步调试与 crane_route_move_x() 共用本接口。
+     * 因此比赛全局协调模式下的每一次 X 轴换点，同样使用本文件的
+     * 3519 限速、提前制动和双电机同步修正逻辑，无需维护第二套底盘算法。
+     */
     pos_pid_sync.target_pos = target_pos;
     pos_pid_sync.busy = 1U;
     pos_pid_sync.arrived = 0U;
@@ -242,6 +260,7 @@ uint8_t pos_pid_sync_is_busy(void)
     float pos_error;
     float motor1_pos;
     float motor2_pos;
+    float avg_feedback_vel;
     float sync_error;
 
     if ((pos_pid_sync.enabled == 0U) || (pos_pid_sync.hcan == NULL))
@@ -254,10 +273,14 @@ uint8_t pos_pid_sync_is_busy(void)
     pos_error = pos_pid_sync_absf(pos_pid_sync.target_pos - pos_pid_sync.current_pos);
     motor1_pos = POS_PID_SYNC_MOTOR1_DIR * motor_angle_get(pos_pid_sync.motor1_index);
     motor2_pos = POS_PID_SYNC_MOTOR2_DIR * motor_angle_get(pos_pid_sync.motor2_index);
+    avg_feedback_vel = 0.5f *
+        (pos_pid_sync_absf(motor[pos_pid_sync.motor1_index].para.vel) +
+         pos_pid_sync_absf(motor[pos_pid_sync.motor2_index].para.vel));
     sync_error = pos_pid_sync_absf(motor1_pos - motor2_pos);
 
     if ((pos_error <= pos_pid_sync.reach_tol) &&
-        (sync_error <= POS_PID_SYNC_SYNC_REACH_TOL))
+        (sync_error <= POS_PID_SYNC_SYNC_REACH_TOL) &&
+        (avg_feedback_vel <= POS_PID_SYNC_STOP_VEL_TOL))
     {
         if ((now_tick - pos_pid_sync.reach_tick) >= POS_PID_SYNC_REACH_HOLD_MS)
         {
@@ -399,12 +422,12 @@ void pos_pid_sync_process(void)
     uint32_t now_tick;      // 当前系统毫秒计时，用来控制 PID 计算周期。
     float motor1_pos;       // 电机 1 按同步方向修正后的实际位置反馈。
     float motor2_pos;       // 电机 2 按同步方向修正后的实际位置反馈。
-    float motor1_vel;       // 电机 1 按同步方向修正后的实际速度反馈。
-    float motor2_vel;       // 电机 2 按同步方向修正后的实际速度反馈。
+    float motor1_vel;       // 电机 1 按同步方向修正后的驱动器速度反馈。
+    float motor2_vel;       // 电机 2 按同步方向修正后的驱动器速度反馈。
     float target_error;
     float sync_error;
     float avg_pos;          // 两台电机的平均位置，代表双电机系统的整体当前位置。
-    float avg_vel;          // 两台电机速度绝对值的平均值，代表当前整体运动速度。
+    float avg_feedback_vel; // 两台电机实际速度绝对值平均，仅用于安全到位判定。
     float pos_offset;       // 位置外环输出，用平均位置误差计算整体位置补偿量。
     float balance_offset;   // 同步平衡环输出，用两电机位置差计算左右同步修正量。
     float cmd_vel;          // 最终下发给位置模式的输出轴速度限制。
@@ -432,18 +455,14 @@ void pos_pid_sync_process(void)
     motor1_vel = POS_PID_SYNC_MOTOR1_DIR * motor1->para.vel;
     motor2_vel = POS_PID_SYNC_MOTOR2_DIR * motor2->para.vel;
     avg_pos = 0.5f * (motor1_pos + motor2_pos); // 计算平均位置，用于判断整体距离目标位置还有多远。
-    /*
-     * 直接使用两台 3519 的速度反馈，避免以 10 ms 多圈位置差分估速。
-     * CAN 位置反馈并非严格等周期到达；差分估速会产生 0/尖峰交替，导致
-     * 速度 PID 提前、反复收紧速度。位置坐标和下发速度 ×30 均保持原样。
-     */
-    avg_vel = 0.5f * (pos_pid_sync_absf(motor1_vel) +
-                      pos_pid_sync_absf(motor2_vel));
+    avg_feedback_vel = 0.5f * (pos_pid_sync_absf(motor1_vel) +
+                               pos_pid_sync_absf(motor2_vel));
     target_error = pos_pid_sync.target_pos - avg_pos;
     sync_error = motor1_pos - motor2_pos;
 
     if ((pos_pid_sync_absf(target_error) <= POS_PID_SYNC_SETTLE_TOL) &&
-        (pos_pid_sync_absf(sync_error) <= POS_PID_SYNC_SYNC_DEADBAND))
+        (pos_pid_sync_absf(sync_error) <= POS_PID_SYNC_SYNC_DEADBAND) &&
+        (avg_feedback_vel <= POS_PID_SYNC_STOP_VEL_TOL))
     {
         pos_offset = 0.0f;
         balance_offset = 0.0f;
@@ -464,7 +483,12 @@ void pos_pid_sync_process(void)
         {
             balance_offset = parallel_pid_ctrl(&pos_pid_sync.balance_pid, 0.0f, sync_error);
         }
-        cmd_vel = parallel_pid_ctrl(&pos_pid_sync.vel_pid, pos_pid_sync_absf(target_error), avg_vel);
+        /*
+         * 位置型速度规划：剩余距离越小，允许的速度连续越低。
+         * 不能将“位置误差 - 实际速度”送入 PID；二者直接相减会在
+         * 实际速度大于剩余距离时使速度指令突变为 0，导致惯性过冲。
+         */
+        cmd_vel = POS_PID_SYNC_VEL_KP * pos_pid_sync_absf(target_error);
         cmd_vel = pos_pid_sync_clampf(cmd_vel, 0.0f, pos_pid_sync.max_output_vel);
 
         /* ---- 到位减速坡道：进入 DECEL_RANGE 后，将 cmd_vel 上限按距离线性收紧 ---- */
@@ -477,19 +501,27 @@ void pos_pid_sync_process(void)
                 ramp_vel = pos_pid_sync.max_output_vel * (abs_err / POS_PID_SYNC_DECEL_RANGE);
 
                 /* 还在工作区内时给个最小限速，避免被 PID/速度噪声卡死无法继续靠近 */
-                if ((abs_err > POS_PID_SYNC_SETTLE_TOL) && (ramp_vel < POS_PID_SYNC_DECEL_MIN_VEL))
+                if (((abs_err > POS_PID_SYNC_SETTLE_TOL) ||
+                     (avg_feedback_vel > POS_PID_SYNC_STOP_VEL_TOL)) &&
+                    (ramp_vel < POS_PID_SYNC_DECEL_MIN_VEL))
                 {
                     ramp_vel = POS_PID_SYNC_DECEL_MIN_VEL;
                 }
             }
 
-            /* 二次约束：按 v = sqrt(2 * a * s) 计算「当前距离最大允许速度」，
-             * 让减速过程平滑到 0，避免靠近时仍以坡道边界速度冲过去 */
+            /*
+             * 二次约束：motor_angle 与 para.vel 都是电机侧单位，必须先把
+             * 输出轴速度换成电机侧速度，才可按 v = sqrt(2*a*s) 计算可停下
+             * 的最大速度。此前直接拿“输出轴速度”与电机侧距离计算，量纲
+             * 不一致，制动约束几乎从不生效，导致超过目标后才反向。
+             */
             {
-                float brake_vel = sqrtf(2.0f * POS_PID_SYNC_DECEL_ACCEL * abs_err);
-                if (brake_vel < ramp_vel)
+                float brake_motor_vel = sqrtf(2.0f * POS_PID_SYNC_DECEL_ACCEL * abs_err);
+                float brake_output_vel = brake_motor_vel / POS_PID_SYNC_VEL_CMD_RATIO;
+
+                if (brake_output_vel < ramp_vel)
                 {
-                    ramp_vel = brake_vel;
+                    ramp_vel = brake_output_vel;
                 }
             }
 

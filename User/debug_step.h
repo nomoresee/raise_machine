@@ -9,7 +9,7 @@
  * 1：单步调试模式，START 按键由 debug_step_process() 使用。
  */
 #ifndef DEBUG_STEP_MODE_ENABLE
-#define DEBUG_STEP_MODE_ENABLE 1U
+#define DEBUG_STEP_MODE_ENABLE 0U
 #endif
 
 /*
