@@ -15,6 +15,14 @@
 #define CRANE_ROUTE_PICK_BOX_CLEARANCE        5.8f//脱盒高度，代表夹爪超过目标位置+脱盒高度爪子的就可以移动
 #define CRANE_ROUTE_Z_TOL                      1.0f//到位容忍值
 
+/*
+ * 首趟取 3 号时，夹爪沿用旧单爪路线的取物侧下绕入口。
+ * X 接近该入口前必须确认夹爪已进入此 Y 安全通道；否则暂停 X，
+ * 等夹爪到位后再同时恢复 X 并释放夹爪去 3 号实际取物 Y。
+ */
+#define CRANE_ROUTE_PICK3_LOWER_ENTRY_Y         8.0f
+#define CRANE_ROUTE_PICK3_X_ENTRY_WAIT_MARGIN  25.0f
+
 /* 避障门槛由 xy_route 统一标定的两处障碍物坐标推导，避免重复维护。 */
 #define CRANE_ROUTE_X_OBS1_PRE_50 \
     (XY_ROUTE_X_ENTRY_PICK_SIDE + 50.0f)
@@ -337,6 +345,14 @@ static uint8_t crane_route_x_reached(float trigger)
     return (pos_pid_sync_get_current_pos() >= trigger) ? 1U : 0U;
 }
 
+/* 与旧 xy_route 的取物侧下绕入口判定保持一致：X 向负方向运行时，
+ * 在入口前 25 个位置单位开始检查夹爪 Y，给 X 留出停车余量。 */
+static uint8_t crane_route_x_near_pick3_lower_entry(void)
+{
+    return (pos_pid_sync_get_current_pos() <=
+            (XY_ROUTE_X_ENTRY_PICK_SIDE + CRANE_ROUTE_PICK3_X_ENTRY_WAIT_MARGIN)) ? 1U : 0U;
+}
+
 static uint8_t crane_route_check_unique_range(const uint8_t *values,
                                               uint8_t count,
                                               uint8_t min_value,
@@ -590,17 +606,27 @@ static float crane_route_load_y_for_pick(uint8_t pick_slot)
 static void crane_route_prepare_pick(uint8_t pick_index)
 {
     uint8_t slot = crane_route.plan.pick_order[pick_index];
+    uint8_t first_pick_is_slot3 = ((pick_index == 0U) && (slot == 3U)) ? 1U : 0U;
 
     crane_route.pick_index = pick_index;
     crane_route.current_slot = slot;
     crane_route.next_x_started = 0U;
     crane_route_move_x(crane_route_slot_pose[slot].chassis_pos);
-    crane_route_move_claw_y(crane_route_slot_pose[slot].beam_pos);
+    if (first_pick_is_slot3 != 0U)
+    {
+        crane_route_move_claw_y(CRANE_ROUTE_PICK3_LOWER_ENTRY_Y);
+    }
+    else
+    {
+        crane_route_move_claw_y(crane_route_slot_pose[slot].beam_pos);
+    }
     crane_route_move_upper_y(CRANE_ROUTE_UPPER_HOPPER_STOW_Y);
     crane_route_move_lower_y(CRANE_ROUTE_LOWER_HOPPER_STOW_Y);
     crane_route_move_z(crane_route_pick_approach_z(slot));
     servo3_path_release_pick_area();
-    crane_route_enter_state(CRANE_ROUTE_WAIT_PICK_APPROACH);
+    crane_route_enter_state((first_pick_is_slot3 != 0U) ?
+                            CRANE_ROUTE_WAIT_PICK3_LOWER_ENTRY :
+                            CRANE_ROUTE_WAIT_PICK_APPROACH);
 }
 
 static void crane_route_try_start_next_pick_x(void)
@@ -874,6 +900,47 @@ void crane_route_process(void)
             }
             servo3_path_release_pick_area();
             crane_route_prepare_pick(0U);
+            break;
+
+        /*
+         * 仅首趟 3 号需要走取物侧下绕：X 继续朝 3 号走，夹爪 Y 先到
+         * 下绕入口。X 接近入口时，Y 已到位就直接放行至 3 号目标 Y；
+         * 否则保持 X，直到 Y 到位。
+         */
+        case CRANE_ROUTE_WAIT_PICK3_LOWER_ENTRY:
+            if (crane_route_x_near_pick3_lower_entry() != 0U)
+            {
+                if (crane_route_claw_y_arrived() != 0U)
+                {
+                    crane_route_move_claw_y(
+                        crane_route_slot_pose[crane_route.current_slot].beam_pos);
+                    crane_route_enter_state(CRANE_ROUTE_WAIT_PICK_APPROACH);
+                }
+                else
+                {
+                    crane_route_hold_x();
+                    crane_route_enter_state(CRANE_ROUTE_HOLD_X_WAIT_PICK3_LOWER_Y);
+                }
+            }
+            else if (crane_route_state_timed_out(CRANE_ROUTE_MOTION_TIMEOUT_MS) != 0U)
+            {
+                crane_route_fault_from_wait();
+            }
+            break;
+
+        case CRANE_ROUTE_HOLD_X_WAIT_PICK3_LOWER_Y:
+            if (crane_route_claw_y_arrived() != 0U)
+            {
+                crane_route_move_x(
+                    crane_route_slot_pose[crane_route.current_slot].chassis_pos);
+                crane_route_move_claw_y(
+                    crane_route_slot_pose[crane_route.current_slot].beam_pos);
+                crane_route_enter_state(CRANE_ROUTE_WAIT_PICK_APPROACH);
+            }
+            else if (crane_route_state_timed_out(CRANE_ROUTE_MOTION_TIMEOUT_MS) != 0U)
+            {
+                crane_route_fault_from_wait();
+            }
             break;
 
         case CRANE_ROUTE_WAIT_PICK_APPROACH:
