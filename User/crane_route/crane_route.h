@@ -15,12 +15,19 @@
 #define CRANE_ROUTE_BEAM_PATH_ONLY_DEFAULT 0U
 #define CRANE_ROUTE_CHASSIS_ONLY           0U
 
+/*
+ * 临时联调开关：
+ * 0：关闭路线运行前/运行中的“六台电机反馈必须在 250 ms 内有效”总拦截。
+ * 1：恢复正式运行所需的反馈失鲜立即停机保护。
+ */
+#define CRANE_ROUTE_FEEDBACK_FAIL_FAST_ENABLE 0U
+
 /* 独立 Z 轴步进测试仍沿用当前 2325 电机及 lift_ctrl。 */
 #ifndef CRANE_ROUTE_Z_STEP_TEST_ENABLE
 #define CRANE_ROUTE_Z_STEP_TEST_ENABLE     0U
 #endif
 
-#define CRANE_ROUTE_LIFT_SAFE_POS          21.0f
+#define CRANE_ROUTE_LIFT_SAFE_POS          7.35f
 #define CRANE_ROUTE_Z_TEST_DROP_POS         4.2f
 #define CRANE_ROUTE_Z_TEST_PICK_POS         2.5f
 

@@ -52,8 +52,8 @@ static uint32_t lower_hopper_gate_estimate_settle_ms(float from_angle_deg,
  */
 static void lower_hopper_gate_hw_write_angle(float angle_deg)
 {
-    /* PE14 -> TIM1_CH4 */
-    servo_set_angle(&htim1, TIM_CHANNEL_4, angle_deg);
+    /* PA2 -> TIM2_CH3 */
+    servo_set_angle(&htim2, TIM_CHANNEL_3, angle_deg);
 }
 
 static void lower_hopper_gate_set_target(float target_angle_deg)

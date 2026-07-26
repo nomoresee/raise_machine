@@ -56,11 +56,38 @@ void vofa_debug_step_process(uint8_t motor_select,
                              float command_motor_vel);
 
 /**
+ * @brief 上料斗单步调试专用输出。
+ * @note USART1 每 20 ms 输出：target_pos,actual_pos\r\n。
+ *       两个值均为 upper_hopper_y_ctrl 坐标系下的位置。
+ */
+void vofa_debug_upper_hopper_process(float target_pos, float actual_pos);
+
+/**
+ * @brief 下料斗单步调试专用输出。
+ * @note USART1 每 20 ms 输出：target_pos,actual_pos\r\n。
+ *       两个值均为 lower_hopper_y_ctrl 坐标系下的位置。
+ */
+void vofa_debug_lower_hopper_process(float target_pos, float actual_pos);
+
+/**
+ * @brief 爪子横梁单步调试专用输出。
+ * @note USART1 每 20 ms 输出：target_pos,actual_pos\r\n。
+ *       两个值均为 beam_ctrl 坐标系下的位置。
+ */
+void vofa_debug_beam_process(float target_pos, float actual_pos);
+
+/**
+ * @brief 爪子升降单步调试专用输出。
+ * @note USART1 每 20 ms 输出：target_pos,actual_pos\r\n。
+ *       两个值均为 lift_ctrl 坐标系下的位置。
+ */
+void vofa_debug_lift_process(float target_pos, float actual_pos);
+
+/**
  * @brief 底盘双电机单步调试专用 VOFA 输出。
- * @note USART1 每 20 ms 输出一行八个浮点数，顺序为：
- *       M1实际位置、M1目标位置、M1反馈速度、M1下发速度、
- *       M2实际位置、M2目标位置、M2反馈速度、M2下发速度。
- *       均为电机原始坐标；Motor2 未做方向翻转，方便直接对应 CAN ID 2。
+ * @note USART1 每 20 ms 输出四个通道：
+ *       M1实际位置、M1目标位置、M2实际位置、M2目标位置。
+ *       调用端已将 Motor2 翻转到统一的底盘正方向。
  */
 void vofa_debug_chassis_process(float motor1_actual_pos,
                                 float motor1_target_pos,

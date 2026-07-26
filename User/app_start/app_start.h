@@ -9,7 +9,7 @@
  *   再按 app_start.c 中的固定数据包启动路线。
  */
 #ifndef APP_START_MANUAL_DRAW_MODE
-#define APP_START_MANUAL_DRAW_MODE  0U
+#define APP_START_MANUAL_DRAW_MODE  1U
 #endif
 
 void app_start_init(void);

@@ -34,7 +34,7 @@
 #if (APP_START_MANUAL_DRAW_MODE != 0U)
 /* 保持与树莓派实际回传完全相同的帧格式与 PICK 排序语义。 */
 #define APP_START_MANUAL_DRAW_PACKET \
-    "START;PICK=7,6,8;PLACE=5,3,1,2,4;END"
+    "START;PICK=7,8,6;PLACE=3,5,4,1,2;END"
 #define APP_START_DELAY_MS        APP_START_BUZZER_MS
 #else
 #define APP_START_DELAY_MS        8000U  /* 收到视觉结果后等待 8s 再启动 */

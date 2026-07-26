@@ -63,10 +63,12 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 static float pos_target = 200.0f;
-static float pos_vel = 2.0f;
-static float beam_vel = 1.2f;
+static float pos_vel = 0.4f;
+static float beam_vel = 0.4f;
+static float upper_hopper_y_vel = 0.4f;
+static float lower_hopper_y_vel = 0.4f;
 /* 升降控制器使用输出端速度单位；30:1 减速后 1.0 会下发为电机侧 30.0。 */
-static float lift_vel = 1.0f;
+static float lift_vel = 0.4f;
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
@@ -216,9 +218,9 @@ int main(void)
   beam_ctrl_init(&hfdcan1, Motor3);
   beam_ctrl_set_max_vel(beam_vel);
   upper_hopper_y_ctrl_init(&hfdcan1, Motor5);
-  upper_hopper_y_ctrl_set_max_vel(beam_vel);
+  upper_hopper_y_ctrl_set_max_vel(upper_hopper_y_vel);
   lower_hopper_y_ctrl_init(&hfdcan1, Motor6);
-  lower_hopper_y_ctrl_set_max_vel(beam_vel);
+  lower_hopper_y_ctrl_set_max_vel(lower_hopper_y_vel);
   lift_ctrl_init(&hfdcan1, Motor4);
   lift_ctrl_set_max_vel(lift_vel);
   crane_route_init();
@@ -237,8 +239,8 @@ int main(void)
   servo3_path_init();
   upper_hopper_gate_init();
   lower_hopper_gate_init();
-  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);  /* PA2: upper hopper gate */
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);  /* PE14: lower hopper gate */
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);  /* PA2: lower hopper gate */
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);  /* PE14: upper hopper gate */
 
 
 
@@ -288,10 +290,15 @@ int main(void)
     lower_hopper_gate_process();
     vofa_debug_process();
 #endif
-  // servo3_set_angle(0.0f);
-  //  HAL_Delay(2000);
-  //   servo3_set_angle(135.0f);
-  //   HAL_Delay(4000);
+
+  //  servo3_set_angle(5.0f);
+  //  HAL_Delay(4000);
+  //  servo3_set_angle(135.0f);
+  //  HAL_Delay(4000);
+  //   servo3_set_angle(270.0f);
+  //  HAL_Delay(4000);
+
+
   }
     /* USER CODE END WHILE */
 

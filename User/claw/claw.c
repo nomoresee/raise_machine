@@ -108,6 +108,14 @@ void claw_open(void)
                    CLAW_NORMAL_SPEED_DEG_PER_SEC);
 }
 
+/* 放入上/下斗时仅张到 60°，避免全张开与斗子机构发生干涉。 */
+void claw_open_hopper(void)
+{
+    claw_set_angle(CLAW_LEFT_HOPPER_OPEN_ANGLE_DEG,
+                   CLAW_RIGHT_HOPPER_OPEN_ANGLE_DEG,
+                   CLAW_NORMAL_SPEED_DEG_PER_SEC);
+}
+
 void claw_close(void)
 {
     claw_set_angle(CLAW_LEFT_CLOSE_ANGLE_DEG,
@@ -149,6 +157,14 @@ uint8_t claw_is_open(void)
     return ((claw.busy == 0U) &&
             (claw_absf(claw.left_current_angle_deg - CLAW_LEFT_OPEN_ANGLE_DEG) <= CLAW_ANGLE_TOL_DEG) &&
             (claw_absf(claw.right_current_angle_deg - CLAW_RIGHT_OPEN_ANGLE_DEG) <= CLAW_ANGLE_TOL_DEG)) ? 1U : 0U;
+}
+
+uint8_t claw_is_hopper_open(void)
+{
+    claw_process();
+    return ((claw.busy == 0U) &&
+            (claw_absf(claw.left_current_angle_deg - CLAW_LEFT_HOPPER_OPEN_ANGLE_DEG) <= CLAW_ANGLE_TOL_DEG) &&
+            (claw_absf(claw.right_current_angle_deg - CLAW_RIGHT_HOPPER_OPEN_ANGLE_DEG) <= CLAW_ANGLE_TOL_DEG)) ? 1U : 0U;
 }
 
 uint8_t claw_is_closed(void)

@@ -4,7 +4,7 @@
 #include "main.h"
 
 /* X 轴两处避障物的标定坐标：取货侧为第一个障碍物，放置侧为第二个障碍物。 */
-#define XY_ROUTE_X_ENTRY_PICK_SIDE       -750.0f
+#define XY_ROUTE_X_ENTRY_PICK_SIDE       -817.0f
 #define XY_ROUTE_X_ENTRY_PLACE_SIDE       500.0f
 
 typedef enum

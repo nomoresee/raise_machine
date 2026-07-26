@@ -7,13 +7,13 @@
 #define CRANE_ROUTE_GOODS_SOYBEAN             8U
 
 /* Z 轴仍使用当前达妙 2325；以下均为现有位置单位。 */
-#define CRANE_ROUTE_LIFT_PICK_1_POS           7.7f
-#define CRANE_ROUTE_LIFT_PICK_2_POS           4.2f
-#define CRANE_ROUTE_LIFT_PICK_3_POS          10.5f
-#define CRANE_ROUTE_LIFT_PLACE_POS            2.5f
-#define CRANE_ROUTE_PICK_APPROACH_CLEARANCE   8.0f//安全接近高度--目标位置+高度
-#define CRANE_ROUTE_PICK_BOX_CLEARANCE        5.8f//脱盒高度，代表夹爪超过目标位置+脱盒高度爪子的就可以移动
-#define CRANE_ROUTE_Z_TOL                      1.0f//到位容忍值
+#define CRANE_ROUTE_LIFT_PICK_1_POS           2.57f
+#define CRANE_ROUTE_LIFT_PICK_2_POS           1.64f
+#define CRANE_ROUTE_LIFT_PICK_3_POS           3.57f
+#define CRANE_ROUTE_LIFT_PLACE_POS            0.65f
+#define CRANE_ROUTE_PICK_APPROACH_CLEARANCE   2.8f//安全接近高度--目标位置+高度
+#define CRANE_ROUTE_PICK_BOX_CLEARANCE        2.7f//脱盒高度，代表夹爪超过目标位置+脱盒高度爪子的就可以移动
+#define CRANE_ROUTE_Z_TOL                     0.1f//到位容忍值
 
 /*
  * 首趟取 3 号时，夹爪沿用旧单爪路线的取物侧下绕入口。
@@ -32,8 +32,8 @@
     (XY_ROUTE_X_ENTRY_PLACE_SIDE + 50.0f)
 
 /* 两类放置 X：4/8 先在外侧站释放，其余在内侧站释放。 */
-#define CRANE_ROUTE_X_EXTREME_STATION       1015.0f//4，8号放置位置
-#define CRANE_ROUTE_X_REMAINING_STATION     1103.5f//5,6,7号放置位置
+#define CRANE_ROUTE_X_EXTREME_STATION       825.0f//4，8号放置位置
+#define CRANE_ROUTE_X_REMAINING_STATION     1052.0f//5,6,7号放置位置
 
 /*
  * 三套 Y 坐标必须独立标定。斗子上电时放在两侧机械安全位并保存零点，
@@ -48,29 +48,31 @@
  * 若当前物料由上料斗承接，夹爪移动到 LOAD_UPPER_Y；
  * 若由下料斗承接，则移动到 LOAD_LOWER_Y。
  */
-#define CRANE_ROUTE_CLAW_LOAD_UPPER_Y         -25.0f
-#define CRANE_ROUTE_CLAW_LOAD_LOWER_Y          25.0f
+#define CRANE_ROUTE_CLAW_LOAD_UPPER_Y         15.2f
+#define CRANE_ROUTE_CLAW_LOAD_LOWER_Y         -16.2f
 
 /*
  * 通过第一个 X 向障碍物前，三套 Y 机构共同采用的“上侧安全通道”坐标。
  * 三轴必须全部到位后，底盘才允许继续向放置区运动。
  */
-#define CRANE_ROUTE_CLAW_UPPER_SAFE_Y          -8.0f//三个的上侧安全通道坐标
-#define CRANE_ROUTE_UPPER_UPPER_SAFE_Y         -8.0f
-#define CRANE_ROUTE_LOWER_UPPER_SAFE_Y         -8.0f
+#define CRANE_ROUTE_CLAW_UPPER_SAFE_Y          16.9f//三个的上侧安全通道坐标
+#define CRANE_ROUTE_UPPER_UPPER_SAFE_Y         -3.8f
+#define CRANE_ROUTE_LOWER_UPPER_SAFE_Y         -38.6f
 
 /*
  * 底盘接近第二个 X 向障碍物时，三套 Y 机构切换到“下侧过渡通道”坐标。
  * 若 Y 轴未及时到位，路线会暂停 X 轴，等待三套机构全部进入该安全位置。
  */
-#define CRANE_ROUTE_CLAW_LOWER_TRANS_Y           8.0f//三个的下侧过渡通道坐标
-#define CRANE_ROUTE_UPPER_LOWER_TRANS_Y          8.0f
-#define CRANE_ROUTE_LOWER_LOWER_TRANS_Y          8.0f
+#define CRANE_ROUTE_CLAW_LOWER_TRANS_Y           -17.2f//三个的下侧过渡通道坐标
+#define CRANE_ROUTE_UPPER_LOWER_TRANS_Y          35.7f
+#define CRANE_ROUTE_LOWER_LOWER_TRANS_Y          6.0f
 
 /* 电机反馈超过此时间未更新，立即判定总线/电机反馈失效并停机。 */
 #define CRANE_ROUTE_FEEDBACK_TIMEOUT_MS        250U
 /* 夹爪和旋转舵机在规定时间内未到位时的超时保护。 */
 #define CRANE_ROUTE_SERVO_TIMEOUT_MS         10000U
+/* 夹爪在上/下斗内张到 60° 后的漏料保持时间。 */
+#define CRANE_ROUTE_HOPPER_RELEASE_HOLD_MS      800U
 /* X、三套 Y、Z 任一位置动作的最大允许持续时间。 */
 #define CRANE_ROUTE_MOTION_TIMEOUT_MS       120000U
 /* 上、下料斗门从接到开门命令到完成关门的最大允许时间。 */
@@ -119,6 +121,7 @@ typedef struct
     uint8_t gate_close_commanded_mask;
     uint32_t upper_gate_open_tick;
     uint32_t lower_gate_open_tick;
+    uint32_t hopper_release_open_tick;
     uint32_t state_tick;
     float target_x;
     float target_claw_y;
@@ -130,9 +133,9 @@ typedef struct
 static crane_slot_pose_t crane_route_slot_pose[CRANE_ROUTE_SLOT_COUNT + 1U] =
 {
     {0.0f, 0.0f, 0.0f, 0.0f},
-    {-1265.0f, -15.95f, CRANE_ROUTE_LIFT_PICK_1_POS, CRANE_ROUTE_LIFT_SAFE_POS},
-    {-1265.0f,  16.25f, CRANE_ROUTE_LIFT_PICK_2_POS, CRANE_ROUTE_LIFT_SAFE_POS},
-    {-1091.2f,    0.40f, CRANE_ROUTE_LIFT_PICK_3_POS, CRANE_ROUTE_LIFT_SAFE_POS},
+    {-1266.2f, 15.2f, CRANE_ROUTE_LIFT_PICK_1_POS, CRANE_ROUTE_LIFT_SAFE_POS},
+    {-1266.2f,  -16.2f, CRANE_ROUTE_LIFT_PICK_2_POS, CRANE_ROUTE_LIFT_SAFE_POS},
+    {-1083.0f,  -1.0f, CRANE_ROUTE_LIFT_PICK_3_POS, CRANE_ROUTE_LIFT_SAFE_POS},
     { 1015.0f,  -24.10f, CRANE_ROUTE_LIFT_PLACE_POS, CRANE_ROUTE_LIFT_SAFE_POS},
     { 1103.5f,  -12.70f, CRANE_ROUTE_LIFT_PLACE_POS, CRANE_ROUTE_LIFT_SAFE_POS},
     { 1103.5f,    0.10f, CRANE_ROUTE_LIFT_PLACE_POS, CRANE_ROUTE_LIFT_SAFE_POS},
@@ -143,18 +146,18 @@ static crane_slot_pose_t crane_route_slot_pose[CRANE_ROUTE_SLOT_COUNT + 1U] =
 /* 同一箱号的三个机构 Y 不共用变量，便于逐项标定。 */
 static float crane_route_upper_place_y[CRANE_ROUTE_SLOT_COUNT + 1U] =
 {
-    0.0f, 0.0f, 0.0f, 0.0f, -24.10f, -12.70f, 0.10f, 0.0f, 0.0f
+    0.0f, 0.0f, 0.0f, 0.0f, -11.0f, 8.0f, 23.3f, 0.0f, 0.0f
 };//上料斗的放置Y坐标（只有4，5，6号位置）
 
 static float crane_route_claw_place_y[CRANE_ROUTE_SLOT_COUNT + 1U] =
 {
-    0.0f, 0.0f, 0.0f, 0.0f, 0.0f, -12.70f, 0.10f, 13.30f, 0.0f
-};//上料斗的放置Y坐标（只有5，6，7号位置）
+    0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 12.70f, -0.70f, -13.0f, 0.0f
+};//爪子的放置Y坐标（只有5，6，7号位置）
 
 static float crane_route_lower_place_y[CRANE_ROUTE_SLOT_COUNT + 1U] =
 {
-    0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.10f, 13.30f, 25.15f
-};//上料斗的放置Y坐标（只有6，7，8号位置）
+    0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, -23.8f, -8.0f, 11.3f
+};//下料斗的放置Y坐标（只有6，7，8号位置）
 
 static crane_route_t crane_route;
 
@@ -571,19 +574,6 @@ static float crane_route_place_box_clear_z(uint8_t slot)
     return clear;
 }
 
-/* 放置区先停在目标上方的接近高度；X/Y 全到位后才允许继续下放。 */
-static float crane_route_place_approach_z(uint8_t slot)
-{
-    float approach = crane_route_slot_pose[slot].lift_work_pos +
-                     CRANE_ROUTE_PICK_APPROACH_CLEARANCE;
-
-    if (approach > crane_route_slot_pose[slot].lift_safe_pos)
-    {
-        approach = crane_route_slot_pose[slot].lift_safe_pos;
-    }
-    return approach;
-}
-
 static crane_carrier_e crane_route_carrier_for_pick(uint8_t pick_slot)
 {
     if (pick_slot == crane_route.plan.upper.pick_slot)
@@ -678,8 +668,6 @@ static void crane_route_move_all_place_y(void)
         crane_route_claw_place_y[crane_route.plan.claw.place_slot]);
     crane_route_move_lower_y(
         crane_route_lower_place_y[crane_route.plan.lower.place_slot]);
-    crane_route_move_z(
-        crane_route_place_approach_z(crane_route.plan.claw.place_slot));
 }
 
 static uint8_t crane_route_extreme_mask(void)
@@ -695,27 +683,6 @@ static uint8_t crane_route_extreme_mask(void)
         mask |= CRANE_RELEASE_LOWER_MASK;
     }
     return mask;
-}
-
-static uint8_t crane_route_remaining_coords_arrived(void)
-{
-    uint8_t ready = 1U;
-
-    if ((crane_route.release_mask & CRANE_RELEASE_UPPER_MASK) == 0U)
-    {
-        ready = (uint8_t)(ready & crane_route_upper_y_arrived());
-    }
-    if ((crane_route.release_mask & CRANE_RELEASE_CLAW_MASK) == 0U)
-    {
-        ready = (uint8_t)(ready & crane_route_claw_y_arrived());
-        ready = (uint8_t)(ready & crane_route_z_arrived());
-    }
-    if ((crane_route.release_mask & CRANE_RELEASE_LOWER_MASK) == 0U)
-    {
-        ready = (uint8_t)(ready & crane_route_lower_y_arrived());
-    }
-
-    return ready;
 }
 
 static void crane_route_start_gate_cycle(uint8_t mask)
@@ -841,6 +808,7 @@ void crane_route_start(void)
     crane_route.gate_cycle_mask = 0U;
     crane_route.gate_open_seen_mask = 0U;
     crane_route.gate_close_commanded_mask = 0U;
+    crane_route.hopper_release_open_tick = 0U;
     crane_route.target_x = pos_pid_sync_get_current_pos();
     crane_route.target_claw_y = beam_ctrl_get_current_pos();
     crane_route.target_upper_y = upper_hopper_y_ctrl_get_current_pos();
@@ -871,6 +839,7 @@ void crane_route_process(void)
      * 任一参与联动的电机反馈失鲜都立即停轴，禁止继续使用旧位置等待
      * 120 s 动作超时。ID 未正确配置或总线掉线时也会在起步前拦截。
      */
+#if (CRANE_ROUTE_FEEDBACK_FAIL_FAST_ENABLE != 0U)
     if ((crane_route.state != CRANE_ROUTE_IDLE) &&
         (crane_route.state != CRANE_ROUTE_FINISHED) &&
         (crane_route.state != CRANE_ROUTE_FAULT) &&
@@ -879,6 +848,7 @@ void crane_route_process(void)
         crane_route_fault_stop(CRANE_ROUTE_FAULT_FEEDBACK_TIMEOUT);
         return;
     }
+#endif
 
     switch (crane_route.state)
     {
@@ -1043,14 +1013,23 @@ void crane_route_process(void)
             break;
 
         case CRANE_ROUTE_RELEASE_TO_HOPPER:
-            claw_open();
+            crane_route.hopper_release_open_tick = 0U;
+            claw_open_hopper();
             crane_route_enter_state(CRANE_ROUTE_WAIT_RELEASE_TO_HOPPER);
             break;
 
         case CRANE_ROUTE_WAIT_RELEASE_TO_HOPPER:
-            if (claw_is_open() != 0U)
+            if (claw_is_hopper_open() != 0U)
             {
-                crane_route_enter_state(CRANE_ROUTE_CLOSE_AND_ROTATE_BACK);
+                if (crane_route.hopper_release_open_tick == 0U)
+                {
+                    crane_route.hopper_release_open_tick = HAL_GetTick();
+                }
+                else if ((HAL_GetTick() - crane_route.hopper_release_open_tick) >=
+                         CRANE_ROUTE_HOPPER_RELEASE_HOLD_MS)
+                {
+                    crane_route_enter_state(CRANE_ROUTE_CLOSE_AND_ROTATE_BACK);
+                }
             }
             else if (crane_route_state_timed_out(CRANE_ROUTE_SERVO_TIMEOUT_MS) != 0U)
             {
@@ -1240,12 +1219,10 @@ void crane_route_process(void)
             break;
 
         case CRANE_ROUTE_WAIT_REMAINING_COORDS:
+            /* Z 最终下放只等待承载夹爪的 X 与横梁 Y；两只料斗的门仍各自等 Y 到位。 */
             if ((crane_route_x_arrived() != 0U) &&
-                (crane_route_remaining_coords_arrived() != 0U))
+                (crane_route_claw_y_arrived() != 0U))
             {
-                remaining_gate_mask = (uint8_t)((~crane_route.release_mask) &
-                    (CRANE_RELEASE_UPPER_MASK | CRANE_RELEASE_LOWER_MASK));
-                crane_route_start_gate_cycle(remaining_gate_mask);
                 crane_route_enter_state(CRANE_ROUTE_PLACE_DESCEND);
             }
             else if (crane_route_state_timed_out(CRANE_ROUTE_MOTION_TIMEOUT_MS) != 0U)
@@ -1254,7 +1231,7 @@ void crane_route_process(void)
             }
             break;
 
-        /* X/三套 Y 以及 Z 接近高度均到位后，夹爪才下到真实放置高度。 */
+        /* 爪子 X/Y 到最终放置位后，Z 才直接下到真实放置高度。 */
         case CRANE_ROUTE_PLACE_DESCEND:
             crane_route_move_z(
                 crane_route_slot_pose[crane_route.plan.claw.place_slot].lift_work_pos);
@@ -1274,6 +1251,21 @@ void crane_route_process(void)
             break;
 
         case CRANE_ROUTE_WAIT_REMAINING_RELEASE:
+            remaining_gate_mask = 0U;
+            if (((crane_route.release_mask & CRANE_RELEASE_UPPER_MASK) == 0U) &&
+                (crane_route.gate_cycle_mask & CRANE_RELEASE_UPPER_MASK) == 0U &&
+                (crane_route_upper_y_arrived() != 0U))
+            {
+                remaining_gate_mask |= CRANE_RELEASE_UPPER_MASK;
+            }
+            if (((crane_route.release_mask & CRANE_RELEASE_LOWER_MASK) == 0U) &&
+                (crane_route.gate_cycle_mask & CRANE_RELEASE_LOWER_MASK) == 0U &&
+                (crane_route_lower_y_arrived() != 0U))
+            {
+                remaining_gate_mask |= CRANE_RELEASE_LOWER_MASK;
+            }
+            crane_route_start_gate_cycle(remaining_gate_mask);
+
             if (((crane_route.release_mask & CRANE_RELEASE_CLAW_MASK) == 0U) &&
                 (claw_is_open() != 0U))
             {

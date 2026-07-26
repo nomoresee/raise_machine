@@ -32,9 +32,9 @@
  * debug_step_direction：+1 为机构正方向，-1 为机构反方向；长按 3~6 秒可切换。
  * 长按至少 6 秒后松开：所选机构自动回到坐标 0，不会改写电机内部零点。
  */
-uint8_t debug_step_motor_select = DEBUG_STEP_CHASSIS_X ;
-float debug_step_coarse_distance = 20.0f;
-float debug_step_fine_distance = 1000.0f;
+uint8_t debug_step_motor_select = DEBUG_STEP_CHASSIS_X;
+float debug_step_coarse_distance = 5.0f;
+float debug_step_fine_distance = 50.0f;
 int8_t debug_step_direction = 1;
 
 typedef struct
@@ -377,18 +377,46 @@ void debug_step_vofa_process(void)
     if (debug_step.active_select == DEBUG_STEP_CHASSIS_X)
     {
         /*
-         * 底盘调试专用 8 通道；两台电机均转换到统一的底盘正方向，
-         * 便于直接比较实际位置、控制器最终目标、反馈速度与速度上限。
+         * 底盘调试专用 4 通道；两台电机均转换到统一的底盘正方向。
+         * 输出顺序：M1实际、M1公共目标、M2实际、M2公共目标。
          */
         vofa_debug_chassis_process(
             DEBUG_STEP_CHASSIS_MOTOR1_DIR * motor_angle_get(Motor1),
-            DEBUG_STEP_CHASSIS_MOTOR1_DIR * motor[Motor1].ctrl.pos_set,
+            debug_step.target_pos,
             DEBUG_STEP_CHASSIS_MOTOR1_DIR * motor[Motor1].para.vel,
             motor[Motor1].ctrl.vel_set,
             DEBUG_STEP_CHASSIS_MOTOR2_DIR * motor_angle_get(Motor2),
-            DEBUG_STEP_CHASSIS_MOTOR2_DIR * motor[Motor2].ctrl.pos_set,
+            debug_step.target_pos,
             DEBUG_STEP_CHASSIS_MOTOR2_DIR * motor[Motor2].para.vel,
             motor[Motor2].ctrl.vel_set);
+        return;
+    }
+
+    if (debug_step.active_select == DEBUG_STEP_UPPER_HOPPER_Y)
+    {
+        vofa_debug_upper_hopper_process(debug_step.target_pos,
+                                        debug_step_get_current_pos());
+        return;
+    }
+
+    if (debug_step.active_select == DEBUG_STEP_LOWER_HOPPER_Y)
+    {
+        vofa_debug_lower_hopper_process(debug_step.target_pos,
+                                        debug_step_get_current_pos());
+        return;
+    }
+
+    if (debug_step.active_select == DEBUG_STEP_CLAW_Y)
+    {
+        vofa_debug_beam_process(debug_step.target_pos,
+                                debug_step_get_current_pos());
+        return;
+    }
+
+    if (debug_step.active_select == DEBUG_STEP_CLAW_Z)
+    {
+        vofa_debug_lift_process(debug_step.target_pos,
+                                debug_step_get_current_pos());
         return;
     }
 

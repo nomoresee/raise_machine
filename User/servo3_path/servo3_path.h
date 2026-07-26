@@ -16,13 +16,13 @@
  *   3 号取物后：首版先采用 135 -> 270，实车标定时只改下面一个宏。
  */
 #define SERVO3_PICK_AREA_ANGLE_DEG          135.0f
-#define SERVO3_PLACE_DEFAULT_ANGLE_DEG        0.0f
+#define SERVO3_PLACE_DEFAULT_ANGLE_DEG        5.0f
 #define SERVO3_PICK1_PLACE_ANGLE_DEG         270.0f
-#define SERVO3_PICK2_PLACE_ANGLE_DEG           0.0f
+#define SERVO3_PICK2_PLACE_ANGLE_DEG           5.0f
 #define SERVO3_PICK3_PLACE_ANGLE_DEG         270.0f
 
 /* servo3 无位置反馈，到位只能按角速度和余量估算。 */
-#define SERVO3_ROTATE_SPEED_DEG_PER_SEC      270.0f
+#define SERVO3_ROTATE_SPEED_DEG_PER_SEC      180.0f
 #define SERVO3_SETTLE_MARGIN_MS              120U
 #define SERVO3_ANGLE_TOL_DEG                   1.0f
 

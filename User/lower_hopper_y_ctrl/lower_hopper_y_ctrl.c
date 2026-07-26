@@ -9,7 +9,10 @@
 #define LOWER_HOPPER_Y_CTRL_REACH_HOLD_MS    80U
 #define LOWER_HOPPER_Y_CTRL_DEFAULT_MAX_VEL  1.0f
 #define LOWER_HOPPER_Y_CTRL_DIR              -1.0f
-#define LOWER_HOPPER_Y_CTRL_POS_RATIO        (1.0f / 30.0f)
+/* 下斗位置直接使用 Motor6 位置模式的 rad 坐标，不再除以 30。 */
+#define LOWER_HOPPER_Y_CTRL_POS_RATIO        1.0f
+/* 速度仍按 30:1 机构侧速度换算为电机侧限速值后下发。 */
+#define LOWER_HOPPER_Y_CTRL_VEL_RATIO        30.0f
 #define LOWER_HOPPER_Y_CTRL_DECEL_RANGE      12.0f
 #define LOWER_HOPPER_Y_CTRL_SETTLE_TOL       0.05f
 #define LOWER_HOPPER_Y_CTRL_VEL_OUT_MIN      0.18f
@@ -230,7 +233,7 @@ void lower_hopper_y_ctrl_process(void)
                                              LOWER_HOPPER_Y_CTRL_VEL_STEP_DOWN);
     }
 
-    cmd_motor_vel = lower_hopper_y_ctrl.cmd_output_vel / LOWER_HOPPER_Y_CTRL_POS_RATIO;
+    cmd_motor_vel = lower_hopper_y_ctrl.cmd_output_vel * LOWER_HOPPER_Y_CTRL_VEL_RATIO;
     motor_ptr->ctrl.mode = pos_mode;
     motor_ptr->ctrl.pos_set =
         motor_angle_to_raw_pos(lower_hopper_y_ctrl.motor_index,

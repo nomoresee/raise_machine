@@ -127,30 +127,25 @@ void vofa_debug_process(void)
     vofa_debug.snapshot.route_fault = (uint16_t)crane_route_get_fault();
     vofa_debug.snapshot.valid = 1U;
 
-    printf("%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,"
-           "%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%lu,%lu,%u,%u\r\n",
-           target_x,
+    /*
+     * VOFA FireWater 纯数字 CSV，共 12 个通道：
+     * M1实际,M1目标,M2实际,M2目标,...,M6实际,M6目标。
+     * Motor1/Motor2 共用底盘 X 目标；其余电机使用各自机构坐标系目标。
+     */
+    printf("%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,"
+           "%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\r\n",
            motor1_show,
+           target_x,
            motor2_show,
-           target_error,
-           motor1_para_vel,
-           motor2_para_vel,
-           target_y,
+           target_x,
            motor3_pos,
-           motor3_para_vel,
-           target_z,
+           target_y,
            motor4_pos,
-           motor4_para_vel,
-           target_upper_y,
+           target_z,
            motor5_pos,
-           motor5_para_vel,
-           target_lower_y,
+           target_upper_y,
            motor6_pos,
-           motor6_para_vel,
-           (unsigned long)vofa_debug.snapshot.motor5_feedback_age_ms,
-           (unsigned long)vofa_debug.snapshot.motor6_feedback_age_ms,
-           (unsigned int)vofa_debug.snapshot.route_state,
-           (unsigned int)vofa_debug.snapshot.route_fault);
+           target_lower_y);
 }
 
 void vofa_debug_step_process(uint8_t motor_select,
@@ -178,6 +173,58 @@ void vofa_debug_step_process(uint8_t motor_select,
            (double)command_motor_vel);
 }
 
+void vofa_debug_upper_hopper_process(float target_pos, float actual_pos)
+{
+    uint32_t now_ms = HAL_GetTick();
+
+    if ((now_ms - vofa_debug_step_print_tick) < VOFA_DEBUG_STEP_PRINT_MS)
+    {
+        return;
+    }
+    vofa_debug_step_print_tick = now_ms;
+
+    printf("%.3f,%.3f\r\n", (double)target_pos, (double)actual_pos);
+}
+
+void vofa_debug_lower_hopper_process(float target_pos, float actual_pos)
+{
+    uint32_t now_ms = HAL_GetTick();
+
+    if ((now_ms - vofa_debug_step_print_tick) < VOFA_DEBUG_STEP_PRINT_MS)
+    {
+        return;
+    }
+    vofa_debug_step_print_tick = now_ms;
+
+    printf("%.3f,%.3f\r\n", (double)target_pos, (double)actual_pos);
+}
+
+void vofa_debug_beam_process(float target_pos, float actual_pos)
+{
+    uint32_t now_ms = HAL_GetTick();
+
+    if ((now_ms - vofa_debug_step_print_tick) < VOFA_DEBUG_STEP_PRINT_MS)
+    {
+        return;
+    }
+    vofa_debug_step_print_tick = now_ms;
+
+    printf("%.3f,%.3f\r\n", (double)target_pos, (double)actual_pos);
+}
+
+void vofa_debug_lift_process(float target_pos, float actual_pos)
+{
+    uint32_t now_ms = HAL_GetTick();
+
+    if ((now_ms - vofa_debug_step_print_tick) < VOFA_DEBUG_STEP_PRINT_MS)
+    {
+        return;
+    }
+    vofa_debug_step_print_tick = now_ms;
+
+    printf("%.3f,%.3f\r\n", (double)target_pos, (double)actual_pos);
+}
+
 void vofa_debug_chassis_process(float motor1_actual_pos,
                                 float motor1_target_pos,
                                 float motor1_feedback_vel,
@@ -195,15 +242,16 @@ void vofa_debug_chassis_process(float motor1_actual_pos,
     }
     vofa_debug_step_print_tick = now_ms;
 
-    printf("%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\r\n",
+    (void)motor1_feedback_vel;
+    (void)motor1_command_vel;
+    (void)motor2_feedback_vel;
+    (void)motor2_command_vel;
+
+    printf("%.3f,%.3f,%.3f,%.3f\r\n",
            (double)motor1_actual_pos,
            (double)motor1_target_pos,
-           (double)motor1_feedback_vel,
-           (double)motor1_command_vel,
            (double)motor2_actual_pos,
-           (double)motor2_target_pos,
-           (double)motor2_feedback_vel,
-           (double)motor2_command_vel);
+           (double)motor2_target_pos);
 }
 
 void vofa_debug_chassis_feedback_process(float motor1_actual_pos,
