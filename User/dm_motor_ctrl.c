@@ -4,6 +4,13 @@ motor_t motor[num];
 
 static volatile uint8_t motor_feedback_valid[num];
 static volatile uint32_t motor_feedback_tick_ms[num];
+static volatile uint32_t motor_feedback_sequence[num];
+static volatile uint8_t motor_parameter_read_pending[num];
+static volatile uint8_t motor_parameter_expected_rid[num];
+
+#define DM_MOTOR_FEEDBACK_PMAX  12.5f
+#define DM_MOTOR_FEEDBACK_VMAX  45.0f
+#define DM_MOTOR_FEEDBACK_TMAX  10.0f
 
 static void dm_motor_mark_feedback(motor_num motor_index)
 {
@@ -13,7 +20,109 @@ static void dm_motor_mark_feedback(motor_num motor_index)
 	}
 
 	motor_feedback_tick_ms[motor_index] = HAL_GetTick();
+	motor_feedback_sequence[motor_index]++;
 	motor_feedback_valid[motor_index] = 1U;
+}
+
+static uint8_t dm_motor_index_from_pointer(const motor_t *motor_ptr,
+										  motor_num *motor_index)
+{
+	motor_num index;
+
+	if ((motor_ptr == NULL) || (motor_index == NULL))
+	{
+		return 0U;
+	}
+
+	for (index = Motor1; index < num; index++)
+	{
+		if (motor_ptr == &motor[index])
+		{
+			*motor_index = index;
+			return 1U;
+		}
+	}
+
+	return 0U;
+}
+
+static uint8_t dm_motor_read_flag_to_rid(uint8_t read_flag, uint8_t *rid)
+{
+	if (rid == NULL)
+	{
+		return 0U;
+	}
+
+	if ((read_flag >= 1U) && (read_flag <= 37U))
+	{
+		*rid = (uint8_t)(read_flag - 1U);
+		return 1U;
+	}
+
+	switch (read_flag)
+	{
+		case 38U: *rid = RID_U_OFF; return 1U;
+		case 39U: *rid = RID_V_OFF; return 1U;
+		case 40U: *rid = RID_K1;    return 1U;
+		case 41U: *rid = RID_K2;    return 1U;
+		case 42U: *rid = RID_M_OFF; return 1U;
+		case 43U: *rid = RID_DIR;   return 1U;
+		case 44U: *rid = RID_P_M;   return 1U;
+		case 45U: *rid = RID_X_OUT; return 1U;
+		default:                    return 0U;
+	}
+}
+
+static void dm_motor_mark_parameter_request(motor_t *motor_ptr)
+{
+	motor_num motor_index;
+	uint8_t rid;
+
+	if ((dm_motor_index_from_pointer(motor_ptr, &motor_index) == 0U) ||
+		(dm_motor_read_flag_to_rid(motor_ptr->tmp.read_flag, &rid) == 0U))
+	{
+		return;
+	}
+
+	motor_parameter_expected_rid[motor_index] = rid;
+	motor_parameter_read_pending[motor_index] = 1U;
+}
+
+static uint8_t dm_motor_try_parameter_response(motor_num motor_index,
+											  uint8_t *rx_data)
+{
+	motor_t *motor_ptr;
+
+	if ((motor_index < Motor1) || (motor_index >= num) || (rx_data == NULL))
+	{
+		return 0U;
+	}
+
+	motor_ptr = &motor[motor_index];
+	if ((motor_parameter_read_pending[motor_index] == 0U) ||
+		(rx_data[0] != (uint8_t)(motor_ptr->id & 0xFFU)) ||
+		((rx_data[1] & 0x07U) != (uint8_t)((motor_ptr->id >> 8) & 0x07U)) ||
+		(rx_data[2] != 0x33U) ||
+		(rx_data[3] != motor_parameter_expected_rid[motor_index]))
+	{
+		return 0U;
+	}
+
+	receive_motor_data(motor_ptr, rx_data);
+	motor_parameter_read_pending[motor_index] = 0U;
+	return 1U;
+}
+
+static void dm_motor_process_feedback(motor_num motor_index, uint8_t *rx_data)
+{
+	if (dm_motor_try_parameter_response(motor_index, rx_data) != 0U)
+	{
+		return;
+	}
+
+	dm_motor_fbdata(&motor[motor_index], rx_data);
+	dm_motor_mark_feedback(motor_index);
+	motor_angle_feedback_update(motor_index);
 }
 
 
@@ -37,6 +146,9 @@ void dm_motor_init(void)
 	memset(&motor[Motor6], 0, sizeof(motor[Motor6]));
 	memset((void *)motor_feedback_valid, 0, sizeof(motor_feedback_valid));
 	memset((void *)motor_feedback_tick_ms, 0, sizeof(motor_feedback_tick_ms));
+	memset((void *)motor_feedback_sequence, 0, sizeof(motor_feedback_sequence));
+	memset((void *)motor_parameter_read_pending, 0, sizeof(motor_parameter_read_pending));
+	memset((void *)motor_parameter_expected_rid, 0, sizeof(motor_parameter_expected_rid));
 
 	// 设置Motor1的电机信�?
 	motor[Motor1].id = 0x01;
@@ -48,9 +160,9 @@ void dm_motor_init(void)
 	motor[Motor1].ctrl.tor_set 	= 0.0f;
 	motor[Motor1].ctrl.cur_set 	= 0.0f;
 	motor[Motor1].ctrl.kd_set 	= 1.0f;
-	motor[Motor1].tmp.PMAX		= 12.5f;
-	motor[Motor1].tmp.VMAX		= 60.0f;
-	motor[Motor1].tmp.TMAX		= 10.0f;
+	motor[Motor1].tmp.PMAX		= DM_MOTOR_FEEDBACK_PMAX;
+	motor[Motor1].tmp.VMAX		= DM_MOTOR_FEEDBACK_VMAX;
+	motor[Motor1].tmp.TMAX		= DM_MOTOR_FEEDBACK_TMAX;
 // 设置Motor2的电机信�?
 	motor[Motor2].id = 0x02;
 	motor[Motor2].mst_id = 0x12;
@@ -61,9 +173,9 @@ void dm_motor_init(void)
 	motor[Motor2].ctrl.tor_set 	= 0.0f;
 	motor[Motor2].ctrl.cur_set 	= 0.0f;
 	motor[Motor2].ctrl.kd_set 	= 1.0f;
-	motor[Motor2].tmp.PMAX		= 12.5f;
-	motor[Motor2].tmp.VMAX		= 60.0f;
-	motor[Motor2].tmp.TMAX		= 10.0f;
+	motor[Motor2].tmp.PMAX		= DM_MOTOR_FEEDBACK_PMAX;
+	motor[Motor2].tmp.VMAX		= DM_MOTOR_FEEDBACK_VMAX;
+	motor[Motor2].tmp.TMAX		= DM_MOTOR_FEEDBACK_TMAX;
 
 	motor[Motor3].id = 0x03;
 	motor[Motor3].mst_id = 0x13;
@@ -74,9 +186,9 @@ void dm_motor_init(void)
 	motor[Motor3].ctrl.tor_set 	= 0.0f;
 	motor[Motor3].ctrl.cur_set 	= 0.0f;
 	motor[Motor3].ctrl.kd_set 	= 1.0f;
-	motor[Motor3].tmp.PMAX		= 12.5f;
-	motor[Motor3].tmp.VMAX		= 60.0f;
-	motor[Motor3].tmp.TMAX		= 10.0f;
+	motor[Motor3].tmp.PMAX		= DM_MOTOR_FEEDBACK_PMAX;
+	motor[Motor3].tmp.VMAX		= DM_MOTOR_FEEDBACK_VMAX;
+	motor[Motor3].tmp.TMAX		= DM_MOTOR_FEEDBACK_TMAX;
 
 	motor[Motor4].id = 0x04;
 	motor[Motor4].mst_id = 0x14;
@@ -87,9 +199,9 @@ void dm_motor_init(void)
 	motor[Motor4].ctrl.tor_set 	= 0.0f;
 	motor[Motor4].ctrl.cur_set 	= 0.0f;
 	motor[Motor4].ctrl.kd_set 	= 1.0f;
-	motor[Motor4].tmp.PMAX		= 12.5f;
-	motor[Motor4].tmp.VMAX		= 60.0f;
-	motor[Motor4].tmp.TMAX		= 10.0f;
+	motor[Motor4].tmp.PMAX		= DM_MOTOR_FEEDBACK_PMAX;
+	motor[Motor4].tmp.VMAX		= DM_MOTOR_FEEDBACK_VMAX;
+	motor[Motor4].tmp.TMAX		= DM_MOTOR_FEEDBACK_TMAX;
 
 	motor[Motor5].id = 0x05;
 	motor[Motor5].mst_id = 0x15;
@@ -100,9 +212,9 @@ void dm_motor_init(void)
 	motor[Motor5].ctrl.tor_set 	= 0.0f;
 	motor[Motor5].ctrl.cur_set 	= 0.0f;
 	motor[Motor5].ctrl.kd_set 	= 1.0f;
-	motor[Motor5].tmp.PMAX		= 12.5f;
-	motor[Motor5].tmp.VMAX		= 60.0f;
-	motor[Motor5].tmp.TMAX		= 10.0f;
+	motor[Motor5].tmp.PMAX		= DM_MOTOR_FEEDBACK_PMAX;
+	motor[Motor5].tmp.VMAX		= DM_MOTOR_FEEDBACK_VMAX;
+	motor[Motor5].tmp.TMAX		= DM_MOTOR_FEEDBACK_TMAX;
 
 	motor[Motor6].id = 0x06;
 	motor[Motor6].mst_id = 0x16;
@@ -113,9 +225,9 @@ void dm_motor_init(void)
 	motor[Motor6].ctrl.tor_set 	= 0.0f;
 	motor[Motor6].ctrl.cur_set 	= 0.0f;
 	motor[Motor6].ctrl.kd_set 	= 1.0f;
-	motor[Motor6].tmp.PMAX		= 12.5f;
-	motor[Motor6].tmp.VMAX		= 60.0f;
-	motor[Motor6].tmp.TMAX		= 10.0f;
+	motor[Motor6].tmp.PMAX		= DM_MOTOR_FEEDBACK_PMAX;
+	motor[Motor6].tmp.VMAX		= DM_MOTOR_FEEDBACK_VMAX;
+	motor[Motor6].tmp.TMAX		= DM_MOTOR_FEEDBACK_TMAX;
 }
 
 uint8_t dm_motor_feedback_is_valid(motor_num motor_index)
@@ -140,6 +252,16 @@ uint32_t dm_motor_feedback_age_ms(motor_num motor_index)
 	last_tick = motor_feedback_tick_ms[motor_index];
 	return HAL_GetTick() - last_tick;
 }
+
+uint32_t dm_motor_feedback_sequence(motor_num motor_index)
+{
+	if ((motor_index < Motor1) || (motor_index >= num))
+	{
+		return 0U;
+	}
+
+	return motor_feedback_sequence[motor_index];
+}
 /**
 ************************************************************************
 * @brief:      	read_all_motor_data: 读取电机的所有寄存器的数据信�?
@@ -150,6 +272,8 @@ uint32_t dm_motor_feedback_age_ms(motor_num motor_index)
 **/
 void read_all_motor_data(motor_t *motor)
 {
+    dm_motor_mark_parameter_request(motor);
+
     switch (motor->tmp.read_flag)
     {
 		case 1:  read_motor_data(motor->id, RID_UV_VALUE);  break; // UV_Value
@@ -294,39 +418,27 @@ void fdcan1_rx_callback(void)
         switch (rec_id)
         {
             case 0x11:
-                dm_motor_fbdata(&motor[Motor1], rx_data);
-                receive_motor_data(&motor[Motor1], rx_data);
-                dm_motor_mark_feedback(Motor1);
+                dm_motor_process_feedback(Motor1, rx_data);
                 break;
 
             case 0x12:
-                dm_motor_fbdata(&motor[Motor2], rx_data);
-                receive_motor_data(&motor[Motor2], rx_data);
-                dm_motor_mark_feedback(Motor2);
+                dm_motor_process_feedback(Motor2, rx_data);
                 break;
 
             case 0x13:
-                dm_motor_fbdata(&motor[Motor3], rx_data);
-                receive_motor_data(&motor[Motor3], rx_data);
-                dm_motor_mark_feedback(Motor3);
+                dm_motor_process_feedback(Motor3, rx_data);
                 break;
 
             case 0x14:
-                dm_motor_fbdata(&motor[Motor4], rx_data);
-                receive_motor_data(&motor[Motor4], rx_data);
-                dm_motor_mark_feedback(Motor4);
+                dm_motor_process_feedback(Motor4, rx_data);
                 break;
 
             case 0x15:
-                dm_motor_fbdata(&motor[Motor5], rx_data);
-                receive_motor_data(&motor[Motor5], rx_data);
-                dm_motor_mark_feedback(Motor5);
+                dm_motor_process_feedback(Motor5, rx_data);
                 break;
 
             case 0x16:
-                dm_motor_fbdata(&motor[Motor6], rx_data);
-                receive_motor_data(&motor[Motor6], rx_data);
-                dm_motor_mark_feedback(Motor6);
+                dm_motor_process_feedback(Motor6, rx_data);
                 break;
 
             default:

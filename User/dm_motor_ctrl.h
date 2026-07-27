@@ -27,6 +27,7 @@ void read_all_motor_data(motor_t *motor);
 void receive_motor_data(motor_t *motor, uint8_t *data);
 uint8_t dm_motor_feedback_is_valid(motor_num motor_index);
 uint32_t dm_motor_feedback_age_ms(motor_num motor_index);
+uint32_t dm_motor_feedback_sequence(motor_num motor_index);
 
 #endif /* __DM_MOTOR_CTRL_H__ */
 

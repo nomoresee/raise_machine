@@ -3,6 +3,9 @@
 
 #include "stdint.h"
 
+/* 比赛运行期间关闭 LCD，避免阻塞式逐字节 SPI 刷新占用主循环。 */
+#define LCD_APP_ENABLE  0U
+
 /**
  * @brief LCD 应用层初始化（画框/标题/静态文字）
  */

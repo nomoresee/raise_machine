@@ -57,7 +57,7 @@
  */
 #define CRANE_ROUTE_CLAW_UPPER_SAFE_Y          16.9f//三个的上侧安全通道坐标
 #define CRANE_ROUTE_UPPER_UPPER_SAFE_Y         -3.8f
-#define CRANE_ROUTE_LOWER_UPPER_SAFE_Y         -38.6f
+#define CRANE_ROUTE_LOWER_UPPER_SAFE_Y         -35.6f
 
 /*
  * 底盘接近第二个 X 向障碍物时，三套 Y 机构切换到“下侧过渡通道”坐标。
@@ -593,6 +593,29 @@ static float crane_route_load_y_for_pick(uint8_t pick_slot)
            CRANE_ROUTE_CLAW_LOAD_UPPER_Y : CRANE_ROUTE_CLAW_LOAD_LOWER_Y;
 }
 
+/*
+ * 前两颗豆子转交料斗时，旋转路径由“承接料斗类别”决定，而不是取物槽决定：
+ * 上料斗沿用 1 号位路径 135 -> 270；下料斗沿用 2 号位路径 135 -> 5。
+ * 最后一颗由夹爪直接携带，不调用本函数，仍按取物槽选择最终放置路径。
+ */
+static uint8_t crane_route_rotate_to_hopper_for_pick(uint8_t pick_slot)
+{
+    crane_carrier_e carrier = crane_route_carrier_for_pick(pick_slot);
+
+    if (carrier == CRANE_CARRIER_UPPER_HOPPER)
+    {
+        servo3_path_release_angle(SERVO3_PICK1_PLACE_ANGLE_DEG);
+        return 1U;
+    }
+    if (carrier == CRANE_CARRIER_LOWER_HOPPER)
+    {
+        servo3_path_release_angle(SERVO3_PICK2_PLACE_ANGLE_DEG);
+        return 1U;
+    }
+
+    return 0U;
+}
+
 static void crane_route_prepare_pick(uint8_t pick_index)
 {
     uint8_t slot = crane_route.plan.pick_order[pick_index];
@@ -973,11 +996,24 @@ void crane_route_process(void)
             crane_route_try_start_next_pick_x();
             if (crane_route_z_arrived() != 0U)
             {
-                servo3_path_release_place_for_pick(crane_route.current_slot);
-                crane_route_enter_state(
-                    (crane_route.pick_index < (CRANE_ROUTE_PICK_COUNT - 1U)) ?
-                    CRANE_ROUTE_WAIT_ROTATE_TO_LOAD :
-                    CRANE_ROUTE_WAIT_FINAL_ROTATE_PLACE);
+                if (crane_route_carrier_for_pick(crane_route.current_slot) ==
+                    CRANE_CARRIER_CLAW)
+                {
+                    /*
+                     * 最后一颗由夹爪直接携带：保持原逻辑，按取物槽
+                     * 选择 1/2/3 号位对应的最终旋转路径。
+                     */
+                    servo3_path_release_place_for_pick(crane_route.current_slot);
+                    crane_route_enter_state(CRANE_ROUTE_WAIT_FINAL_ROTATE_PLACE);
+                }
+                else
+                {
+                    /*
+                     * 转交上/下料斗时，Z 到安全高度后舵机保持 135 度，
+                     * 先让夹爪 Y 进入对应料斗位置。
+                     */
+                    crane_route_enter_state(CRANE_ROUTE_MOVE_CLAW_TO_HOPPER);
+                }
             }
             else if (crane_route_state_timed_out(CRANE_ROUTE_MOTION_TIMEOUT_MS) != 0U)
             {
@@ -988,7 +1024,7 @@ void crane_route_process(void)
         case CRANE_ROUTE_WAIT_ROTATE_TO_LOAD:
             if (servo3_path_is_arrived() != 0U)
             {
-                crane_route_enter_state(CRANE_ROUTE_MOVE_CLAW_TO_HOPPER);
+                crane_route_enter_state(CRANE_ROUTE_RELEASE_TO_HOPPER);
             }
             else if (crane_route_state_timed_out(CRANE_ROUTE_SERVO_TIMEOUT_MS) != 0U)
             {
@@ -1004,7 +1040,19 @@ void crane_route_process(void)
         case CRANE_ROUTE_WAIT_CLAW_AT_HOPPER:
             if (crane_route_claw_y_arrived() != 0U)
             {
-                crane_route_enter_state(CRANE_ROUTE_RELEASE_TO_HOPPER);
+                /*
+                 * Y 已到对应料斗后才允许旋转。上料斗走 135->270，
+                 * 下料斗走 135->5；旋转完成后再张爪放豆。
+                 */
+                if (crane_route_rotate_to_hopper_for_pick(
+                        crane_route.current_slot) != 0U)
+                {
+                    crane_route_enter_state(CRANE_ROUTE_WAIT_ROTATE_TO_LOAD);
+                }
+                else
+                {
+                    crane_route_fault_stop(CRANE_ROUTE_FAULT_CONFIG);
+                }
             }
             else if (crane_route_state_timed_out(CRANE_ROUTE_MOTION_TIMEOUT_MS) != 0U)
             {
@@ -1039,6 +1087,10 @@ void crane_route_process(void)
 
         case CRANE_ROUTE_CLOSE_AND_ROTATE_BACK:
             claw_close();
+            /*
+             * 料斗放豆完成后按同一路径返回取物朝向：
+             * 上料斗 270->135；下料斗 5->135。
+             */
             servo3_path_release_pick_from_place(crane_route.current_slot);
             crane_route_enter_state(CRANE_ROUTE_WAIT_CLOSE_AND_ROTATE_BACK);
             break;

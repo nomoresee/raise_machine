@@ -37,12 +37,12 @@
 #define POS_PID_SYNC_MOTOR_VEL_MAX   42.0f
 
 #define POS_PID_SYNC_SM_DWELL_MS     2000U
-#define POS_PID_SYNC_SM_REACH_TOL    0.10f
-#define POS_PID_SYNC_REACH_TOL       0.10f
-#define POS_PID_SYNC_SYNC_REACH_TOL  0.05f
+#define POS_PID_SYNC_SM_REACH_TOL    1.00f
+#define POS_PID_SYNC_REACH_TOL       1.00f
+#define POS_PID_SYNC_SYNC_REACH_TOL  0.50f
 #define POS_PID_SYNC_REACH_HOLD_MS   80U
-#define POS_PID_SYNC_SETTLE_TOL      0.10f
-#define POS_PID_SYNC_SYNC_DEADBAND   0.05f
+#define POS_PID_SYNC_SETTLE_TOL      1.00f
+#define POS_PID_SYNC_SYNC_DEADBAND   0.50f
 #define POS_PID_SYNC_HOLD_VEL        0.0f
 /* 位置已进入死区但电机仍在运动时，不能立刻将位置模式速度清零。 */
 #define POS_PID_SYNC_STOP_VEL_TOL    0.50f
@@ -50,7 +50,7 @@
 /* === 到位减速坡道：|err| < DECEL_RANGE 时，cmd_vel 上限按距离线性收缩到 0，
  *     再叠加按当前速度可停下的距离约束，避免过冲震荡 === */
 #define POS_PID_SYNC_DECEL_RANGE     480.0f  /* 电机侧位置单位；按本次实测滑行距离提前进入制动 */
-#define POS_PID_SYNC_DECEL_MIN_VEL   0.03f   /* 乘 30 后为 0.9，贴近目标不再以 9 的上限持续冲击 */
+#define POS_PID_SYNC_DECEL_MIN_VEL   0.05f   /* 乘 30 后为 1.5，保留克服静摩擦的低速驱动力 */
 #define POS_PID_SYNC_DECEL_ACCEL     3.0f    /* 电机侧等效减速度(速度单位/s)，用于 v^2/(2a) 制动距离 */
 
 typedef struct
@@ -390,7 +390,6 @@ void pos_pid_sync_target_state_machine(void)
         return;
     }
 
-    motor_angle_update();
     motor1_pos = POS_PID_SYNC_MOTOR1_DIR * motor_angle_get(pos_pid_sync.motor1_index);
     motor2_pos = POS_PID_SYNC_MOTOR2_DIR * motor_angle_get(pos_pid_sync.motor2_index);
     avg_pos = 0.5f * (motor1_pos + motor2_pos);
@@ -448,8 +447,6 @@ void pos_pid_sync_process(void)
 
     motor1 = &motor[pos_pid_sync.motor1_index]; // 根据初始化时保存的索引找到电机 1。
     motor2 = &motor[pos_pid_sync.motor2_index]; // 根据初始化时保存的索引找到电机 2。
-    motor_angle_update(); // 更新已登记电机的多圈位置。
-
     motor1_pos = POS_PID_SYNC_MOTOR1_DIR * motor_angle_get(pos_pid_sync.motor1_index); // 读取电机 1 位置，并用方向系数统一正方向。
     motor2_pos = POS_PID_SYNC_MOTOR2_DIR * motor_angle_get(pos_pid_sync.motor2_index); // 读取电机 2 位置，并用方向系数统一正方向。
     motor1_vel = POS_PID_SYNC_MOTOR1_DIR * motor1->para.vel;

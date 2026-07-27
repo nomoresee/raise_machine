@@ -64,7 +64,7 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN 0 */
 static float pos_target = 200.0f;
 static float pos_vel = 0.4f;
-static float beam_vel = 0.4f;
+static float beam_vel = 0.5f;
 static float upper_hopper_y_vel = 0.4f;
 static float lower_hopper_y_vel = 0.4f;
 /* 升降控制器使用输出端速度单位；30:1 减速后 1.0 会下发为电机侧 30.0。 */
@@ -126,7 +126,9 @@ int main(void)
   HAL_Delay(50);
   delay_init(480);
 
-#if ((DEBUG_STEP_MODE_ENABLE == 0U) && (CHASSIS_DEBUG_MODE == 0U))
+#if ((LCD_APP_ENABLE != 0U) && \
+     (DEBUG_STEP_MODE_ENABLE == 0U) && \
+     (CHASSIS_DEBUG_MODE == 0U))
   lcd_app_init();
 #endif
 
@@ -261,7 +263,6 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    motor_angle_update_all();
 #if (CHASSIS_DEBUG_MODE != 0U)
     chassis_debug_process();
     pos_pid_sync_process();
@@ -278,7 +279,9 @@ int main(void)
     lower_hopper_gate_process();
     debug_step_vofa_process();
 #else
+#if (LCD_APP_ENABLE != 0U)
     lcd_app_update();
+#endif
     app_start_process();
     pos_pid_sync_process();
     beam_ctrl_process();

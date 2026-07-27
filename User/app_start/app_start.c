@@ -35,10 +35,9 @@
 /* 保持与树莓派实际回传完全相同的帧格式与 PICK 排序语义。 */
 #define APP_START_MANUAL_DRAW_PACKET \
     "START;PICK=7,8,6;PLACE=3,5,4,1,2;END"
-#define APP_START_DELAY_MS        APP_START_BUZZER_MS
-#else
-#define APP_START_DELAY_MS        8000U  /* 收到视觉结果后等待 8s 再启动 */
 #endif
+/* 有效视觉结果写入路线后蜂鸣 1.5s，蜂鸣结束立即启动机械。 */
+#define APP_START_DELAY_MS        APP_START_BUZZER_MS
 #endif
 
 typedef enum

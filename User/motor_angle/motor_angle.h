@@ -39,6 +39,7 @@ void motor_angle_reset_one(motor_num motor_index);
 **/
 void motor_angle_update(void);
 void motor_angle_update_all(void);
+void motor_angle_feedback_update(motor_num motor_index);
 
 /**
 ***********************************************************************

@@ -5,7 +5,7 @@
 #define LIFT_CTRL_POS_RATIO        (1.0f / LIFT_CTRL_REDUCTION_RATIO)
 
 /* 以下所有位置、速度均为升降输出端单位，而非 Motor4 电机侧单位。 */
-#define LIFT_CTRL_REACH_TOL        (0.5f / LIFT_CTRL_REDUCTION_RATIO)
+#define LIFT_CTRL_REACH_TOL        0.10f
 #define LIFT_CTRL_REACH_HOLD_MS    80U
 #define LIFT_CTRL_DEFAULT_MAX_VEL  (30.0f / LIFT_CTRL_REDUCTION_RATIO)
 #define LIFT_CTRL_DIR              1.0f
@@ -25,16 +25,16 @@
 #define LIFT_CTRL_VEL_KI           0.0f
 #define LIFT_CTRL_VEL_KD           0.06f
 #define LIFT_CTRL_VEL_OUT_MAX      (40.0f / LIFT_CTRL_REDUCTION_RATIO)
-#define LIFT_CTRL_VEL_OUT_MIN      (0.5f / LIFT_CTRL_REDUCTION_RATIO)
+#define LIFT_CTRL_VEL_OUT_MIN      0.05f
 
 /*
  * 升降行程远小于底盘：缩短减速区以扩大全速运行区。
- * 数值从原电机侧参数按 30:1 换算到输出端坐标：
- * 线性减速从剩余 0.1 输出端单位开始；刹车约束约从剩余 0.075 开始生效。
+ * 减速范围仍按 30:1 换算到输出端坐标；到位死区与最低速度则按机构
+ * 实际可重复精度设置，避免轻微碰撞后因静摩擦卡在过小的理论误差内。
  */
 #define LIFT_CTRL_DECEL_RANGE      (3.0f / LIFT_CTRL_REDUCTION_RATIO)
-#define LIFT_CTRL_SETTLE_TOL       (0.05f / LIFT_CTRL_REDUCTION_RATIO)
-#define LIFT_CTRL_DECEL_MIN_VEL    (0.30f / LIFT_CTRL_REDUCTION_RATIO)
+#define LIFT_CTRL_SETTLE_TOL       0.10f
+#define LIFT_CTRL_DECEL_MIN_VEL    0.05f
 #define LIFT_CTRL_DECEL_ACCEL      (200.0f / LIFT_CTRL_REDUCTION_RATIO)
 
 typedef struct
