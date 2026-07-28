@@ -149,14 +149,14 @@ void chassis_debug_process(void)
 void chassis_debug_vofa_process(void)
 {
     /*
-     * 输出两台电机的原始位置、反馈速度、目标位置和下发速度上限。
+     * 串口每行输出：M1 实时位置、M1 目标位置、M2 实时位置、M2 目标位置。
      */
-    vofa_debug_chassis_feedback_process(motor_angle_get(Motor1),
-                                        motor[Motor1].para.vel,
-                                        motor[Motor1].ctrl.pos_set,
-                                        motor[Motor1].ctrl.vel_set,
-                                        motor_angle_get(Motor2),
-                                        motor[Motor2].para.vel,
-                                        motor[Motor2].ctrl.pos_set,
-                                        motor[Motor2].ctrl.vel_set);
+    vofa_debug_chassis_process(motor_angle_get(Motor1),
+                               motor[Motor1].ctrl.pos_set,
+                               motor[Motor1].para.vel,
+                               motor[Motor1].ctrl.vel_set,
+                               motor_angle_get(Motor2),
+                               motor[Motor2].ctrl.pos_set,
+                               motor[Motor2].para.vel,
+                               motor[Motor2].ctrl.vel_set);
 }

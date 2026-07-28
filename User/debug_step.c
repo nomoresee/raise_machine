@@ -32,9 +32,9 @@
  * debug_step_direction：+1 为机构正方向，-1 为机构反方向；长按 3~6 秒可切换。
  * 长按至少 6 秒后松开：所选机构自动回到坐标 0，不会改写电机内部零点。
  */
-uint8_t debug_step_motor_select = DEBUG_STEP_CHASSIS_X;
-float debug_step_coarse_distance = 5.0f;
-float debug_step_fine_distance = 50.0f;
+uint8_t debug_step_motor_select = DEBUG_STEP_CLAW_Z;
+float debug_step_coarse_distance = 0.3f;
+float debug_step_fine_distance = 1.0f;
 int8_t debug_step_direction = 1;
 
 typedef struct

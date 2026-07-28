@@ -263,6 +263,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+
 #if (CHASSIS_DEBUG_MODE != 0U)
     chassis_debug_process();
     pos_pid_sync_process();
@@ -294,14 +295,16 @@ int main(void)
     vofa_debug_process();
 #endif
 
-  //  servo3_set_angle(5.0f);
-  //  HAL_Delay(4000);
-  //  servo3_set_angle(135.0f);
-  //  HAL_Delay(4000);
-  //   servo3_set_angle(270.0f);
-  //  HAL_Delay(4000);
-
-
+    /*
+     * 临时上斗门开/关测试：单步调试期间不能执行，否则会阻塞 4 s，
+     * 并且与上斗子 Y 的调试时序混在一起。保留测试命令，后续需要时
+     * 将其移到专用测试模式再启用。
+     *
+     * upper_hopper_gate_open();
+     * HAL_Delay(2000);
+     * upper_hopper_gate_close();
+     * HAL_Delay(2000);
+     */
   }
     /* USER CODE END WHILE */
 

@@ -108,7 +108,7 @@ void claw_open(void)
                    CLAW_NORMAL_SPEED_DEG_PER_SEC);
 }
 
-/* 放入上/下斗时仅张到 60°，避免全张开与斗子机构发生干涉。 */
+/* 放入上/下斗时仅张到 40°，避免全张开与斗子机构发生干涉。 */
 void claw_open_hopper(void)
 {
     claw_set_angle(CLAW_LEFT_HOPPER_OPEN_ANGLE_DEG,

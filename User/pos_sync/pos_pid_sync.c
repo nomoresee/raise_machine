@@ -39,7 +39,7 @@
 #define POS_PID_SYNC_SM_DWELL_MS     2000U
 #define POS_PID_SYNC_SM_REACH_TOL    1.00f
 #define POS_PID_SYNC_REACH_TOL       1.00f
-#define POS_PID_SYNC_SYNC_REACH_TOL  0.50f
+#define POS_PID_SYNC_SYNC_REACH_TOL  0.80f
 #define POS_PID_SYNC_REACH_HOLD_MS   80U
 #define POS_PID_SYNC_SETTLE_TOL      1.00f
 #define POS_PID_SYNC_SYNC_DEADBAND   0.50f
@@ -49,9 +49,9 @@
 
 /* === 到位减速坡道：|err| < DECEL_RANGE 时，cmd_vel 上限按距离线性收缩到 0，
  *     再叠加按当前速度可停下的距离约束，避免过冲震荡 === */
-#define POS_PID_SYNC_DECEL_RANGE     480.0f  /* 电机侧位置单位；按本次实测滑行距离提前进入制动 */
+#define POS_PID_SYNC_DECEL_RANGE     280.0f  /* 电机侧位置单位；按本次实测滑行距离提前进入制动 */
 #define POS_PID_SYNC_DECEL_MIN_VEL   0.05f   /* 乘 30 后为 1.5，保留克服静摩擦的低速驱动力 */
-#define POS_PID_SYNC_DECEL_ACCEL     3.0f    /* 电机侧等效减速度(速度单位/s)，用于 v^2/(2a) 制动距离 */
+#define POS_PID_SYNC_DECEL_ACCEL     5.0f    /* 电机侧等效减速度(速度单位/s)，用于 v^2/(2a) 制动距离 */
 
 typedef struct
 {

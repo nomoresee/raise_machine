@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 #define CLAW_OPEN_ANGLE_DEG                  0.0f
-#define CLAW_HOPPER_OPEN_ANGLE_DEG          60.0f
+#define CLAW_HOPPER_OPEN_ANGLE_DEG          40.0f
 #define CLAW_CLOSE_ANGLE_DEG                90.0f
 #define CLAW_LEFT_OPEN_ANGLE_DEG             CLAW_OPEN_ANGLE_DEG
 #define CLAW_LEFT_CLOSE_ANGLE_DEG            CLAW_CLOSE_ANGLE_DEG
