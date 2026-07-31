@@ -389,6 +389,12 @@ void app_start_process(void)
                     if (crane_route_set_draw_result(pick_goods, place_boxes) != 0U)
                     {
                         /* 视觉数据已完整解析、范围校验并成功写入路线。 */
+                        /*
+                         * 只允许 Z 轴在蜂鸣期间预先抬到安全高度；其余轴仍由
+                         * APP_START_DELAY_BEFORE_RUN 之后的 crane_route 统一释放。
+                         */
+                        lift_ctrl_set_target(CRANE_ROUTE_LIFT_SAFE_POS);
+                        lift_ctrl_start();
                         app_start_buzzer_start();
                         app_start_delay_tick = HAL_GetTick();
                         app_start_state = APP_START_DELAY_BEFORE_RUN;

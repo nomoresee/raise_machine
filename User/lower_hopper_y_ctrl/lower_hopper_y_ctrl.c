@@ -5,7 +5,7 @@
 #include <string.h>
 
 #define LOWER_HOPPER_Y_CTRL_PERIOD_MS        10U
-#define LOWER_HOPPER_Y_CTRL_REACH_TOL        1.2f
+#define LOWER_HOPPER_Y_CTRL_REACH_TOL        1.8f
 #define LOWER_HOPPER_Y_CTRL_REACH_HOLD_MS    80U
 #define LOWER_HOPPER_Y_CTRL_DEFAULT_MAX_VEL  1.0f
 #define LOWER_HOPPER_Y_CTRL_DIR              -1.0f
@@ -13,7 +13,7 @@
 #define LOWER_HOPPER_Y_CTRL_POS_RATIO        1.0f
 /* 速度仍按 30:1 机构侧速度换算为电机侧限速值后下发。 */
 #define LOWER_HOPPER_Y_CTRL_VEL_RATIO        30.0f
-#define LOWER_HOPPER_Y_CTRL_DECEL_RANGE      12.0f
+#define LOWER_HOPPER_Y_CTRL_DECEL_RANGE       4.0f
 #define LOWER_HOPPER_Y_CTRL_SETTLE_TOL       0.05f
 #define LOWER_HOPPER_Y_CTRL_VEL_OUT_MIN      0.18f
 #define LOWER_HOPPER_Y_CTRL_VEL_STEP_UP      0.05f

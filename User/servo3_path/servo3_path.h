@@ -19,10 +19,10 @@
  *   上料斗使用 1 号位路径；下料斗使用 2 号位路径。
  */
 #define SERVO3_PICK_AREA_ANGLE_DEG          135.0f
-#define SERVO3_PLACE_DEFAULT_ANGLE_DEG        5.0f
-#define SERVO3_PICK1_PLACE_ANGLE_DEG         270.0f
-#define SERVO3_PICK2_PLACE_ANGLE_DEG           5.0f
-#define SERVO3_PICK3_PLACE_ANGLE_DEG         270.0f
+#define SERVO3_PLACE_DEFAULT_ANGLE_DEG       13.0f
+#define SERVO3_PICK1_PLACE_ANGLE_DEG         260.0f
+#define SERVO3_PICK2_PLACE_ANGLE_DEG           13.0f
+#define SERVO3_PICK3_PLACE_ANGLE_DEG         260.0f
 
 /* servo3 无位置反馈，到位只能按角速度和余量估算。 */
 #define SERVO3_ROTATE_SPEED_DEG_PER_SEC      180.0f

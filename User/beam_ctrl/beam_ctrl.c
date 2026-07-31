@@ -1,7 +1,7 @@
 #include "headfile.h"
 
 #define BEAM_CTRL_PERIOD_MS        10U
-#define BEAM_CTRL_REACH_TOL        1.2f
+#define BEAM_CTRL_REACH_TOL        1.8f
 #define BEAM_CTRL_REACH_HOLD_MS    80U
 #define BEAM_CTRL_DEFAULT_MAX_VEL  1.0f
 #define BEAM_CTRL_DIR              1.0f  /* 新横梁机构方向与电机正方向一致。 */

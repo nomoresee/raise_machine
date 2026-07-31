@@ -37,5 +37,6 @@
 #include "app_start/app_start.h"
 #include "debug_step.h"
 #include "chassis_debug.h"
+#include "claw_obstacle_debug.h"
 
 #endif

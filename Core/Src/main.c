@@ -63,12 +63,12 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 static float pos_target = 200.0f;
-static float pos_vel = 1.2f;
-static float beam_vel = 1.3f;
-static float upper_hopper_y_vel = 1.25f;
-static float lower_hopper_y_vel = 1.25f;
+static float pos_vel = 0.7f;
+static float beam_vel = 0.85f;
+static float upper_hopper_y_vel = 0.75f;
+static float lower_hopper_y_vel = 0.75f;
 /* 升降控制器使用输出端速度单位；30:1 减速后 1.0 会下发为电机侧 30.0。 */
-static float lift_vel = 1.0f;
+static float lift_vel = 0.5f;
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
@@ -248,7 +248,9 @@ int main(void)
 
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, GPIO_PIN_SET);
 
-  #if (CHASSIS_DEBUG_MODE != 0U)
+  #if (CLAW_OBSTACLE_DEBUG_MODE != 0U)
+  claw_obstacle_debug_init();
+  #elif (CHASSIS_DEBUG_MODE != 0U)
   chassis_debug_init(&hfdcan1);
 #elif (DEBUG_STEP_MODE_ENABLE != 0U)
   debug_step_init();
@@ -264,7 +266,18 @@ int main(void)
   while (1)
   {
 
-#if (CHASSIS_DEBUG_MODE != 0U)
+#if (CLAW_OBSTACLE_DEBUG_MODE != 0U)
+    claw_obstacle_debug_process();
+    pos_pid_sync_process();
+    beam_ctrl_process();
+    upper_hopper_y_ctrl_process();
+    lower_hopper_y_ctrl_process();
+    lift_ctrl_process();
+    claw_process();
+    upper_hopper_gate_process();
+    lower_hopper_gate_process();
+    claw_obstacle_debug_telemetry_process();
+#elif (CHASSIS_DEBUG_MODE != 0U)
     chassis_debug_process();
     pos_pid_sync_process();
     chassis_debug_vofa_process();
@@ -295,16 +308,6 @@ int main(void)
     vofa_debug_process();
 #endif
 
-    /*
-     * 临时上斗门开/关测试：单步调试期间不能执行，否则会阻塞 4 s，
-     * 并且与上斗子 Y 的调试时序混在一起。保留测试命令，后续需要时
-     * 将其移到专用测试模式再启用。
-     *
-     * upper_hopper_gate_open();
-     * HAL_Delay(2000);
-     * upper_hopper_gate_close();
-     * HAL_Delay(2000);
-     */
   }
     /* USER CODE END WHILE */
 
