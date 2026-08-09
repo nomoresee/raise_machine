@@ -14,8 +14,8 @@
 #define CRANE_ROUTE_LIFT_PICK_2_POS           1.5f
 #define CRANE_ROUTE_LIFT_PICK_3_POS           3.5f
 #define CRANE_ROUTE_LIFT_PLACE_POS            2.8f
-#define CRANE_ROUTE_PICK_APPROACH_CLEARANCE   3.8f//安全接近高度--目标位置+高度
-#define CRANE_ROUTE_PICK_BOX_CLEARANCE        2.4f//脱盒高度，代表夹爪超过目标位置+脱盒高度爪子的就可以移动
+#define CRANE_ROUTE_PICK_APPROACH_CLEARANCE   4.0f//安全接近高度--目标位置+高度
+#define CRANE_ROUTE_PICK_BOX_CLEARANCE        2.6f//脱盒高度，代表夹爪超过目标位置+脱盒高度爪子的就可以移动
 #define CRANE_ROUTE_Z_TOL                     0.1f//到位容忍值
 /* 斗子转交后下一颗取物：爪子 Y 距目标进入该范围，才允许 Z 下到接近高度。 */
 #define CRANE_ROUTE_NEXT_PICK_Y_RELEASE_DISTANCE 8.0f
@@ -53,8 +53,8 @@
  * 若当前物料由上料斗承接，夹爪移动到 LOAD_UPPER_Y；
  * 若由下料斗承接，则移动到 LOAD_LOWER_Y。
  */
-#define CRANE_ROUTE_CLAW_LOAD_UPPER_Y         15.50f
-#define CRANE_ROUTE_CLAW_LOAD_LOWER_Y         -16.3f
+#define CRANE_ROUTE_CLAW_LOAD_UPPER_Y         16.3f
+#define CRANE_ROUTE_CLAW_LOAD_LOWER_Y         -16.5f
 
 /*
  * 三套 Y 机构共用的上侧安全通道坐标。
@@ -81,11 +81,10 @@
 #define CRANE_ROUTE_HOPPER_RELEASE_HOLD_MS     1600U
 /* X、三套 Y、Z 任一位置动作的最大允许持续时间。 */
 #define CRANE_ROUTE_MOTION_TIMEOUT_MS       120000U
-/* 上、下料斗门从接到开门命令到完成关门的最大允许时间。 */
+/* 上、下料斗门从接到开门命令到确认打开的最大允许时间。 */
 #define CRANE_ROUTE_GATE_TIMEOUT_MS          10000U
-/* 料门确认打开后保持的放料时间，达到后自动发送关门命令。 */
-#define CRANE_ROUTE_GATE_RELEASE_HOLD_MS      2200U
-
+/* 斗门确认打开后保持的漏豆时间；时间到进入下一步，但斗门保持打开。 */
+#define CRANE_ROUTE_GATE_RELEASE_HOLD_MS      1500U
 /*
  * 放料完成位图：上料斗、夹爪、下料斗各占一个 bit。
  * 状态机用该位图支持两端工位先放料、其余工位后放料的并行/分步流程。
@@ -125,7 +124,6 @@ typedef struct
     uint8_t release_mask;
     uint8_t gate_cycle_mask;
     uint8_t gate_open_seen_mask;
-    uint8_t gate_close_commanded_mask;
     uint32_t upper_gate_open_tick;
     uint32_t lower_gate_open_tick;
     uint32_t hopper_release_open_tick;
@@ -140,8 +138,8 @@ typedef struct
 static crane_slot_pose_t crane_route_slot_pose[CRANE_ROUTE_SLOT_COUNT + 1U] =
 {
     {0.0f, 0.0f, 0.0f, 0.0f},
-    {-1243.0f, 16.1f, CRANE_ROUTE_LIFT_PICK_1_POS, CRANE_ROUTE_LIFT_SAFE_POS},
-    {-1243.0f,  -16.9f, CRANE_ROUTE_LIFT_PICK_2_POS, CRANE_ROUTE_LIFT_SAFE_POS},
+    {-1243.0f, 16.4f, CRANE_ROUTE_LIFT_PICK_1_POS, CRANE_ROUTE_LIFT_SAFE_POS},
+    {-1243.0f,  -16.5f, CRANE_ROUTE_LIFT_PICK_2_POS, CRANE_ROUTE_LIFT_SAFE_POS},
     {-1078.5f,   0.0f, CRANE_ROUTE_LIFT_PICK_3_POS, CRANE_ROUTE_LIFT_SAFE_POS},
     { 1015.0f,  -24.10f, CRANE_ROUTE_LIFT_PLACE_POS, CRANE_ROUTE_LIFT_SAFE_POS},
     { 1103.5f,  -12.70f, CRANE_ROUTE_LIFT_PLACE_POS, CRANE_ROUTE_LIFT_SAFE_POS},
@@ -738,7 +736,6 @@ static void crane_route_start_gate_cycle(uint8_t mask)
 
     crane_route.gate_cycle_mask |= new_mask;
     crane_route.gate_open_seen_mask &= (uint8_t)(~new_mask);
-    crane_route.gate_close_commanded_mask &= (uint8_t)(~new_mask);
 
     if ((new_mask & CRANE_RELEASE_UPPER_MASK) != 0U)
     {
@@ -757,50 +754,36 @@ static uint8_t crane_route_process_gate_cycle(void)
     if (((crane_route.gate_cycle_mask & CRANE_RELEASE_UPPER_MASK) != 0U) &&
         ((crane_route.release_mask & CRANE_RELEASE_UPPER_MASK) == 0U))
     {
-        if ((crane_route.gate_open_seen_mask & CRANE_RELEASE_UPPER_MASK) == 0U)
+        if (upper_hopper_gate_is_open() != 0U)
         {
-            if (upper_hopper_gate_is_open() != 0U)
+            if ((crane_route.gate_open_seen_mask & CRANE_RELEASE_UPPER_MASK) == 0U)
             {
                 crane_route.gate_open_seen_mask |= CRANE_RELEASE_UPPER_MASK;
                 crane_route.upper_gate_open_tick = now;
             }
-        }
-        else if ((crane_route.gate_close_commanded_mask & CRANE_RELEASE_UPPER_MASK) == 0U)
-        {
-            if ((now - crane_route.upper_gate_open_tick) >= CRANE_ROUTE_GATE_RELEASE_HOLD_MS)
+            else if ((now - crane_route.upper_gate_open_tick) >=
+                     CRANE_ROUTE_GATE_RELEASE_HOLD_MS)
             {
-                upper_hopper_gate_close();
-                crane_route.gate_close_commanded_mask |= CRANE_RELEASE_UPPER_MASK;
+                crane_route.release_mask |= CRANE_RELEASE_UPPER_MASK;
             }
-        }
-        else if (upper_hopper_gate_is_closed() != 0U)
-        {
-            crane_route.release_mask |= CRANE_RELEASE_UPPER_MASK;
         }
     }
 
     if (((crane_route.gate_cycle_mask & CRANE_RELEASE_LOWER_MASK) != 0U) &&
         ((crane_route.release_mask & CRANE_RELEASE_LOWER_MASK) == 0U))
     {
-        if ((crane_route.gate_open_seen_mask & CRANE_RELEASE_LOWER_MASK) == 0U)
+        if (lower_hopper_gate_is_open() != 0U)
         {
-            if (lower_hopper_gate_is_open() != 0U)
+            if ((crane_route.gate_open_seen_mask & CRANE_RELEASE_LOWER_MASK) == 0U)
             {
                 crane_route.gate_open_seen_mask |= CRANE_RELEASE_LOWER_MASK;
                 crane_route.lower_gate_open_tick = now;
             }
-        }
-        else if ((crane_route.gate_close_commanded_mask & CRANE_RELEASE_LOWER_MASK) == 0U)
-        {
-            if ((now - crane_route.lower_gate_open_tick) >= CRANE_ROUTE_GATE_RELEASE_HOLD_MS)
+            else if ((now - crane_route.lower_gate_open_tick) >=
+                     CRANE_ROUTE_GATE_RELEASE_HOLD_MS)
             {
-                lower_hopper_gate_close();
-                crane_route.gate_close_commanded_mask |= CRANE_RELEASE_LOWER_MASK;
+                crane_route.release_mask |= CRANE_RELEASE_LOWER_MASK;
             }
-        }
-        else if (lower_hopper_gate_is_closed() != 0U)
-        {
-            crane_route.release_mask |= CRANE_RELEASE_LOWER_MASK;
         }
     }
 
@@ -855,7 +838,8 @@ void crane_route_start(void)
     crane_route.release_mask = 0U;
     crane_route.gate_cycle_mask = 0U;
     crane_route.gate_open_seen_mask = 0U;
-    crane_route.gate_close_commanded_mask = 0U;
+    crane_route.upper_gate_open_tick = 0U;
+    crane_route.lower_gate_open_tick = 0U;
     crane_route.hopper_release_open_tick = 0U;
     crane_route.target_x = pos_pid_sync_get_current_pos();
     crane_route.target_claw_y = beam_ctrl_get_current_pos();
@@ -1434,7 +1418,8 @@ void crane_route_process(void)
             if ((crane_route.release_mask & CRANE_RELEASE_ALL_MASK) ==
                 CRANE_RELEASE_ALL_MASK)
             {
-                crane_route_enter_state(CRANE_ROUTE_LIFT_RETURN_CLEAR);
+                /* 三路豆子均已放完：保持当前位置和开门/开爪状态，直接结束比赛。 */
+                crane_route_enter_state(CRANE_ROUTE_FINISHED);
             }
             else if (crane_route_state_timed_out(CRANE_ROUTE_GATE_TIMEOUT_MS) != 0U)
             {

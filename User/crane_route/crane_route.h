@@ -20,10 +20,10 @@
 #define CRANE_ROUTE_Z_STEP_TEST_ENABLE     0U
 #endif
 
-#define CRANE_ROUTE_LIFT_SAFE_POS          7.85f
+#define CRANE_ROUTE_LIFT_SAFE_POS           8.0f
 #define CRANE_ROUTE_Z_TEST_DROP_POS         4.2f
 #define CRANE_ROUTE_Z_TEST_PICK_POS         2.5f
-
+ 
 #if ((CRANE_ROUTE_LIFT_ONLY != 0U) && (CRANE_ROUTE_Z_STEP_TEST_ENABLE != 0U))
 #error "CRANE_ROUTE_LIFT_ONLY and CRANE_ROUTE_Z_STEP_TEST_ENABLE cannot both be enabled"
 #endif
