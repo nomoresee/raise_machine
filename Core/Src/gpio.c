@@ -105,6 +105,13 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LCD_PAGE_BTN_GPIO_Port, &GPIO_InitStruct);
 
+  /* 24Pin 扩展口 9 号脚 PD15：外挂拨片开关闭合时接 GND。 */
+  GPIO_InitStruct.Pin = EXT_START_SW_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(EXT_START_SW_GPIO_Port, &GPIO_InitStruct);
+
 /* USER CODE END 2 */
 
 }

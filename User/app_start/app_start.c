@@ -51,6 +51,10 @@ typedef enum
 static app_start_state_t app_start_state;
 static uint8_t app_start_key_down;
 static uint32_t app_start_key_tick;
+#if (APP_START_DIRECT_ROUTE_MODE == 0U)
+static uint8_t app_start_ext_switch_on;
+static uint32_t app_start_ext_switch_tick;
+#endif
 static uint8_t app_start_buzzer_active;
 static uint32_t app_start_buzzer_tick;
 #if (CRANE_ROUTE_Z_STEP_TEST_ENABLE != 0U)
@@ -95,6 +99,34 @@ static uint8_t app_start_key_pressed(void)
     app_start_key_down = down;
     return 0U;
 }
+
+#if (APP_START_DIRECT_ROUTE_MODE == 0U)
+/*
+ * 外挂拨片开关只作为正常启动请求：由断开拨到接地时触发一次。
+ * 它不并入板载 PA15 按键的通用读取，避免影响 Z 轴等按键调试。
+ */
+static uint8_t app_start_ext_switch_turned_on(void)
+{
+    uint32_t now = HAL_GetTick();
+    uint8_t on = (HAL_GPIO_ReadPin(EXT_START_SW_GPIO_Port,
+                                   EXT_START_SW_Pin) == GPIO_PIN_RESET) ? 1U : 0U;
+
+    if ((now - app_start_ext_switch_tick) < APP_START_KEY_DEBOUNCE_MS)
+    {
+        return 0U;
+    }
+
+    if ((on != 0U) && (app_start_ext_switch_on == 0U))
+    {
+        app_start_ext_switch_tick = now;
+        app_start_ext_switch_on = on;
+        return 1U;
+    }
+
+    app_start_ext_switch_on = on;
+    return 0U;
+}
+#endif
 
 #if ((APP_START_DIRECT_ROUTE_MODE == 0U) && \
      (APP_START_MANUAL_DRAW_MODE == 0U))
@@ -321,6 +353,10 @@ void app_start_init(void)
     app_start_state = APP_START_WAIT_KEY;
     app_start_key_down = 0U;
     app_start_key_tick = 0U;
+#if (APP_START_DIRECT_ROUTE_MODE == 0U)
+    app_start_ext_switch_on = 0U;
+    app_start_ext_switch_tick = 0U;
+#endif
     app_start_buzzer_active = 0U;
     app_start_buzzer_tick = 0U;
     __HAL_TIM_SET_COMPARE(&htim12, TIM_CHANNEL_2, 0U);
@@ -352,7 +388,15 @@ void app_start_process(void)
     switch (app_start_state)
     {
         case APP_START_WAIT_KEY:
-            if (app_start_key_pressed() != 0U)
+        {
+            uint8_t start_requested = app_start_key_pressed();
+#if (APP_START_DIRECT_ROUTE_MODE == 0U)
+            if (app_start_ext_switch_turned_on() != 0U)
+            {
+                start_requested = 1U;
+            }
+#endif
+            if (start_requested != 0U)
             {
 #if (APP_START_DIRECT_ROUTE_MODE != 0U)
                 crane_route_start();
@@ -380,6 +424,7 @@ void app_start_process(void)
 #endif
             }
             break;
+        }
 
 #if (APP_START_DIRECT_ROUTE_MODE == 0U)
         case APP_START_WAIT_PI_PACKET:

@@ -67,11 +67,14 @@ void Error_Handler(void);
 #define LCD_DC_GPIO_Port GPIOD
 
 /* USER CODE BEGIN Private defines */
-/* DM-MC-Board02 集成板 KEY=PA5（按下接 GND）。ADC 已改为内部 VREF 通道，PA5 专用于此按键。 */
+/* 按键均为低电平有效：PA5 用于 LCD 翻页，PA15 为板载 START。 */
 #define LCD_PAGE_BTN_GPIO_Port GPIOA
 #define LCD_PAGE_BTN_Pin GPIO_PIN_5
 #define START_BTN_GPIO_Port GPIOA
 #define START_BTN_Pin GPIO_PIN_15
+/* DM-MC-Board02 24Pin 扩展口 9 号脚 PD15，外挂拨片开关接 PD15-GND。 */
+#define EXT_START_SW_GPIO_Port GPIOD
+#define EXT_START_SW_Pin GPIO_PIN_15
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus
