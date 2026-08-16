@@ -10,9 +10,9 @@
 #define CRANE_ROUTE_WHITE_BEAN_PICK_EXTRA_LOWER 0.2f
 
 /* Z 轴仍使用当前达妙 2325；以下均为现有位置单位。 */
-#define CRANE_ROUTE_LIFT_PICK_1_POS           2.45f
-#define CRANE_ROUTE_LIFT_PICK_2_POS           1.5f
-#define CRANE_ROUTE_LIFT_PICK_3_POS           3.5f
+#define CRANE_ROUTE_LIFT_PICK_1_POS           2.35f
+#define CRANE_ROUTE_LIFT_PICK_2_POS           1.4f
+#define CRANE_ROUTE_LIFT_PICK_3_POS           3.4f
 #define CRANE_ROUTE_LIFT_PLACE_POS            2.8f
 #define CRANE_ROUTE_PICK_APPROACH_CLEARANCE   4.0f//安全接近高度--目标位置+高度
 #define CRANE_ROUTE_PICK_BOX_CLEARANCE        2.6f//脱盒高度，代表夹爪超过目标位置+脱盒高度爪子的就可以移动
@@ -53,7 +53,7 @@
  * 若当前物料由上料斗承接，夹爪移动到 LOAD_UPPER_Y；
  * 若由下料斗承接，则移动到 LOAD_LOWER_Y。
  */
-#define CRANE_ROUTE_CLAW_LOAD_UPPER_Y         16.3f
+#define CRANE_ROUTE_CLAW_LOAD_UPPER_Y         15.1f
 #define CRANE_ROUTE_CLAW_LOAD_LOWER_Y         -16.5f
 
 /*
@@ -76,15 +76,15 @@
 /* 夹爪和旋转舵机在规定时间内未到位时的超时保护。 */
 #define CRANE_ROUTE_SERVO_TIMEOUT_MS         10000U
 /* 上/下料斗旋转到放豆角度后，夹爪开爪前的稳定等待时间。 */
-#define CRANE_ROUTE_HOPPER_OPEN_DELAY_MS      1000U
+#define CRANE_ROUTE_HOPPER_OPEN_DELAY_MS       600U
 /* 夹爪在上/下斗内张到 40° 后的放豆保持时间。 */
-#define CRANE_ROUTE_HOPPER_RELEASE_HOLD_MS     1600U
+#define CRANE_ROUTE_HOPPER_RELEASE_HOLD_MS      800U
 /* X、三套 Y、Z 任一位置动作的最大允许持续时间。 */
 #define CRANE_ROUTE_MOTION_TIMEOUT_MS       120000U
 /* 上、下料斗门从接到开门命令到确认打开的最大允许时间。 */
 #define CRANE_ROUTE_GATE_TIMEOUT_MS          10000U
 /* 斗门确认打开后保持的漏豆时间；时间到进入下一步，但斗门保持打开。 */
-#define CRANE_ROUTE_GATE_RELEASE_HOLD_MS      1500U
+#define CRANE_ROUTE_GATE_RELEASE_HOLD_MS       600U
 /*
  * 放料完成位图：上料斗、夹爪、下料斗各占一个 bit。
  * 状态机用该位图支持两端工位先放料、其余工位后放料的并行/分步流程。
@@ -121,6 +121,8 @@ typedef struct
     uint8_t current_slot;
     uint8_t next_x_started;
     uint8_t final_pick_y_return_started;
+    uint8_t first_pick_prestart_active;
+    uint8_t first_pick_rotate_released;
     uint8_t release_mask;
     uint8_t gate_cycle_mask;
     uint8_t gate_open_seen_mask;
@@ -138,9 +140,9 @@ typedef struct
 static crane_slot_pose_t crane_route_slot_pose[CRANE_ROUTE_SLOT_COUNT + 1U] =
 {
     {0.0f, 0.0f, 0.0f, 0.0f},
-    {-1243.0f, 16.4f, CRANE_ROUTE_LIFT_PICK_1_POS, CRANE_ROUTE_LIFT_SAFE_POS},
-    {-1243.0f,  -16.5f, CRANE_ROUTE_LIFT_PICK_2_POS, CRANE_ROUTE_LIFT_SAFE_POS},
-    {-1078.5f,   0.0f, CRANE_ROUTE_LIFT_PICK_3_POS, CRANE_ROUTE_LIFT_SAFE_POS},
+    {-1208.5f, 15.7f, CRANE_ROUTE_LIFT_PICK_1_POS, CRANE_ROUTE_LIFT_SAFE_POS},
+    {-1208.5f,  -16.8f, CRANE_ROUTE_LIFT_PICK_2_POS, CRANE_ROUTE_LIFT_SAFE_POS},
+    {-1045.2f,   0.0f, CRANE_ROUTE_LIFT_PICK_3_POS, CRANE_ROUTE_LIFT_SAFE_POS},
     { 1015.0f,  -24.10f, CRANE_ROUTE_LIFT_PLACE_POS, CRANE_ROUTE_LIFT_SAFE_POS},
     { 1103.5f,  -12.70f, CRANE_ROUTE_LIFT_PLACE_POS, CRANE_ROUTE_LIFT_SAFE_POS},
     { 1103.5f,    0.10f, CRANE_ROUTE_LIFT_PLACE_POS, CRANE_ROUTE_LIFT_SAFE_POS},
@@ -620,6 +622,7 @@ static void crane_route_prepare_pick(uint8_t pick_index)
 {
     uint8_t slot = crane_route.plan.pick_order[pick_index];
     uint8_t first_pick_is_slot3 = ((pick_index == 0U) && (slot == 3U)) ? 1U : 0U;
+    uint8_t first_pick_is_slot1 = ((pick_index == 0U) && (slot == 1U)) ? 1U : 0U;
     uint8_t first_pick_needs_safe_rotate =
         ((pick_index == 0U) && ((slot == 1U) || (slot == 2U))) ? 1U : 0U;
 
@@ -633,26 +636,39 @@ static void crane_route_prepare_pick(uint8_t pick_index)
 
     /*
      * 首趟取 1/2 时，旋转爪在低位直接转向会与料斗干涉。
-     * 两者均先把 Z 抬到全局安全旋转高度；其中首趟取 1 号时，
-     * 横梁 Y 也同步先进入下绕避障入口，避免直接朝取物区运动。
-     * 1 号的 Z/Y 都到各自安全位后才旋转；旋转完成后，Y 再去
-     * 实际取物位并与 Z 下到取物接近高度同步开始。
+     * 正式比赛中，视觉结果后的 1.5 s 已经让 Z 预先抬升，并在
+     * Z 到离地高度后开始转向。首趟取 1 号时，正式起步让 X/Y
+     * 直接同时前往 1 号目标位，不再经过下绕入口。
      * 首趟 3 号仍走其原有的取物侧下绕流程，不进入本分支。
      */
     if (first_pick_needs_safe_rotate != 0U)
     {
         crane_route_move_z(CRANE_ROUTE_LIFT_SAFE_POS);
-        if (slot == 1U)
+        if ((first_pick_is_slot1 != 0U) &&
+            (crane_route.first_pick_prestart_active != 0U))
         {
-            crane_route_move_claw_y(CRANE_ROUTE_PICK_LOWER_ENTRY_Y);
+            crane_route_move_claw_y(crane_route_slot_pose[slot].beam_pos);
+            crane_route_enter_state((crane_route.first_pick_rotate_released != 0U) ?
+                                    CRANE_ROUTE_WAIT_FIRST_PICK_ROTATE :
+                                    CRANE_ROUTE_WAIT_FIRST_PICK_LIFT_SAFE);
         }
-        crane_route_enter_state(CRANE_ROUTE_WAIT_FIRST_PICK_LIFT_SAFE);
+        else
+        {
+            if (slot == 1U)
+            {
+                crane_route_move_claw_y(CRANE_ROUTE_PICK_LOWER_ENTRY_Y);
+            }
+            crane_route_enter_state(CRANE_ROUTE_WAIT_FIRST_PICK_LIFT_SAFE);
+        }
     }
     else if (first_pick_is_slot3 != 0U)
     {
         crane_route_move_claw_y(CRANE_ROUTE_PICK_LOWER_ENTRY_Y);
         crane_route_move_z(crane_route_pick_approach_z(slot));
-        servo3_path_release_pick_area();
+        if (crane_route.first_pick_prestart_active == 0U)
+        {
+            servo3_path_release_pick_area();
+        }
         crane_route_enter_state(CRANE_ROUTE_WAIT_PICK3_LOWER_ENTRY);
     }
     else
@@ -828,6 +844,36 @@ uint8_t crane_route_set_draw_result(const uint8_t pick_goods[3],
     return 1U;
 }
 
+void crane_route_prestart_begin(void)
+{
+    crane_route.first_pick_prestart_active = 0U;
+    crane_route.first_pick_rotate_released = 0U;
+
+    /* 与正式 BUILD_PLAN 共用同一套分配规则，避免预准备和正式路线首趟不一致。 */
+    if (crane_route_build_plan() == 0U)
+    {
+        return;
+    }
+
+    crane_route.first_pick_prestart_active = 1U;
+    crane_route_move_z(CRANE_ROUTE_LIFT_SAFE_POS);
+}
+
+void crane_route_prestart_process(void)
+{
+    if ((crane_route.first_pick_prestart_active == 0U) ||
+        (crane_route.first_pick_rotate_released != 0U))
+    {
+        return;
+    }
+
+    if (lift_ctrl_get_current_pos() >= CRANE_ROUTE_FIRST_PICK_ROTATE_RELEASE_Z)
+    {
+        servo3_path_release_pick_area();
+        crane_route.first_pick_rotate_released = 1U;
+    }
+}
+
 void crane_route_start(void)
 {
     crane_route.fault = CRANE_ROUTE_FAULT_NONE;
@@ -867,6 +913,9 @@ void crane_route_process(void)
     uint8_t remaining_gate_mask;
     uint8_t previous_gate_cycle_mask;
 
+    /* 若 1.5 s 内尚未抬到离地高度，正式起步后继续只等待/触发旋转。 */
+    crane_route_prestart_process();
+
     switch (crane_route.state)
     {
         case CRANE_ROUTE_IDLE:
@@ -888,12 +937,22 @@ void crane_route_process(void)
             crane_route_prepare_pick(0U);
             break;
 
-        /*
-         * 首趟取 1/2 的防碰撞前置：Z 未到安全旋转高度前不允许
-         * 旋转爪动作。首趟取 1 号还必须先确认横梁 Y 已到下绕入口，
-         * 再允许旋转，避免 Y 在取物区障碍物旁直接通过。
-         */
+        /* 首趟 1 的正式比赛路径只等待 Z 越过离地阈值后启动的取物朝向旋转。 */
         case CRANE_ROUTE_WAIT_FIRST_PICK_LIFT_SAFE:
+            if ((crane_route.current_slot == 1U) &&
+                (crane_route.first_pick_prestart_active != 0U))
+            {
+                if (crane_route.first_pick_rotate_released != 0U)
+                {
+                    crane_route_enter_state(CRANE_ROUTE_WAIT_FIRST_PICK_ROTATE);
+                }
+                else if (crane_route_state_timed_out(CRANE_ROUTE_MOTION_TIMEOUT_MS) != 0U)
+                {
+                    crane_route_fault_from_wait();
+                }
+                break;
+            }
+
             if ((crane_route_z_arrived() != 0U) &&
                 ((crane_route.current_slot != 1U) ||
                  (crane_route_claw_y_arrived() != 0U)))
@@ -912,11 +971,7 @@ void crane_route_process(void)
             }
             break;
 
-        /*
-         * 首趟取 1 号的旋转完成后，横梁 Y 从下绕入口去实际取物位，
-         * 同时 Z 下到取物接近高度。2 号保持原有的 Y 先走、旋转后
-         * 仅下 Z 的时序。随后统一由 WAIT_PICK_APPROACH 确认全部到位。
-         */
+        /* 旋转完成后，Z 下到取物接近高度；首趟 1 的 Y 已与 X 同时直达目标。 */
         case CRANE_ROUTE_WAIT_FIRST_PICK_ROTATE:
             if (servo3_path_is_arrived() != 0U)
             {

@@ -20,7 +20,8 @@
 #define CRANE_ROUTE_Z_STEP_TEST_ENABLE     0U
 #endif
 
-#define CRANE_ROUTE_LIFT_SAFE_POS           8.0f
+#define CRANE_ROUTE_LIFT_SAFE_POS           8.0f//安全放物高度
+#define CRANE_ROUTE_FIRST_PICK_ROTATE_RELEASE_Z 2.0f//首次初始化旋转高度
 #define CRANE_ROUTE_Z_TEST_DROP_POS         4.2f
 #define CRANE_ROUTE_Z_TEST_PICK_POS         2.5f
  
@@ -63,7 +64,7 @@ typedef enum
 {
     CRANE_ROUTE_IDLE = 0,
     CRANE_ROUTE_BUILD_PLAN,
-    /* 首趟取 1/2：先抬 Z 到安全旋转高度，再允许旋转爪和横梁 Y 动作。 */
+    /* 首趟取 1/2 的旋转等待；正式比赛首趟 1 可复用预抬升后的旋转。 */
     CRANE_ROUTE_WAIT_FIRST_PICK_LIFT_SAFE,
     CRANE_ROUTE_WAIT_FIRST_PICK_ROTATE,
     CRANE_ROUTE_WAIT_PICK3_LOWER_ENTRY,
@@ -115,6 +116,9 @@ typedef enum
 void crane_route_init(void);
 uint8_t crane_route_set_draw_result(const uint8_t pick_goods[3],
                                     const uint8_t place_boxes[5]);
+/* 视觉结果确认后的 1.5 s 预准备：仅抬 Z，并在 Z 离地后转向取物区。 */
+void crane_route_prestart_begin(void);
+void crane_route_prestart_process(void);
 void crane_route_start(void);
 void crane_route_stop(void);
 void crane_route_process(void);

@@ -8,7 +8,7 @@
 #define LIFT_CTRL_REACH_TOL        0.10f
 #define LIFT_CTRL_REACH_HOLD_MS    80U
 #define LIFT_CTRL_DEFAULT_MAX_VEL  (30.0f / LIFT_CTRL_REDUCTION_RATIO)
-#define LIFT_CTRL_DIR              1.0f
+#define LIFT_CTRL_DIR             -1.0f
 
 /*
  * 升降 3519 单轴闭环参数。

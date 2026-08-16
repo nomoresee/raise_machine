@@ -34,7 +34,7 @@
  */
 uint8_t debug_step_motor_select = DEBUG_STEP_CLAW_Y;
 float debug_step_coarse_distance = 0.3f;
-float debug_step_fine_distance = 3.0f;
+float debug_step_fine_distance = 2.0f;
 int8_t debug_step_direction = 1;
 
 typedef struct
