@@ -116,7 +116,7 @@ typedef enum
 void crane_route_init(void);
 uint8_t crane_route_set_draw_result(const uint8_t pick_goods[3],
                                     const uint8_t place_boxes[5]);
-/* 视觉结果确认后的 1.5 s 预准备：仅抬 Z，并在 Z 离地后转向取物区。 */
+/* 视觉结果确认后的 0.5 s 预准备：仅抬 Z，并在 Z 离地后转向取物区。 */
 void crane_route_prestart_begin(void);
 void crane_route_prestart_process(void);
 void crane_route_start(void);

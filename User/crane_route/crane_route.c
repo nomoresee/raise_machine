@@ -10,9 +10,9 @@
 #define CRANE_ROUTE_WHITE_BEAN_PICK_EXTRA_LOWER 0.2f
 
 /* Z 轴仍使用当前达妙 2325；以下均为现有位置单位。 */
-#define CRANE_ROUTE_LIFT_PICK_1_POS           2.35f
-#define CRANE_ROUTE_LIFT_PICK_2_POS           1.4f
-#define CRANE_ROUTE_LIFT_PICK_3_POS           3.4f
+#define CRANE_ROUTE_LIFT_PICK_1_POS           2.2f
+#define CRANE_ROUTE_LIFT_PICK_2_POS           1.05f
+#define CRANE_ROUTE_LIFT_PICK_3_POS           3.2f
 #define CRANE_ROUTE_LIFT_PLACE_POS            2.8f
 #define CRANE_ROUTE_PICK_APPROACH_CLEARANCE   4.0f//安全接近高度--目标位置+高度
 #define CRANE_ROUTE_PICK_BOX_CLEARANCE        2.6f//脱盒高度，代表夹爪超过目标位置+脱盒高度爪子的就可以移动
@@ -38,7 +38,7 @@
 
 /* 两类放置 X：4/8 先在外侧站释放，其余在内侧站释放。 */
 #define CRANE_ROUTE_X_EXTREME_STATION       866.0f//4，8号放置位置
-#define CRANE_ROUTE_X_REMAINING_STATION     1050.0f//5,6,7号放置位置//1028.5
+#define CRANE_ROUTE_X_REMAINING_STATION     1049.0f//5,6,7号放置位置//1028.5
 
 /*
  * 三套 Y 坐标必须独立标定。斗子上电时放在两侧机械安全位并保存零点，
@@ -53,7 +53,7 @@
  * 若当前物料由上料斗承接，夹爪移动到 LOAD_UPPER_Y；
  * 若由下料斗承接，则移动到 LOAD_LOWER_Y。
  */
-#define CRANE_ROUTE_CLAW_LOAD_UPPER_Y         15.1f
+#define CRANE_ROUTE_CLAW_LOAD_UPPER_Y         16.0f
 #define CRANE_ROUTE_CLAW_LOAD_LOWER_Y         -16.5f
 
 /*
@@ -140,9 +140,9 @@ typedef struct
 static crane_slot_pose_t crane_route_slot_pose[CRANE_ROUTE_SLOT_COUNT + 1U] =
 {
     {0.0f, 0.0f, 0.0f, 0.0f},
-    {-1208.5f, 15.7f, CRANE_ROUTE_LIFT_PICK_1_POS, CRANE_ROUTE_LIFT_SAFE_POS},
-    {-1208.5f,  -16.8f, CRANE_ROUTE_LIFT_PICK_2_POS, CRANE_ROUTE_LIFT_SAFE_POS},
-    {-1045.2f,   0.0f, CRANE_ROUTE_LIFT_PICK_3_POS, CRANE_ROUTE_LIFT_SAFE_POS},
+    {-1206.0f,  16.2f, CRANE_ROUTE_LIFT_PICK_1_POS, CRANE_ROUTE_LIFT_SAFE_POS},
+    {-1206.0f,  -16.2f, CRANE_ROUTE_LIFT_PICK_2_POS, CRANE_ROUTE_LIFT_SAFE_POS},
+    {-1028.2f,   0.0f, CRANE_ROUTE_LIFT_PICK_3_POS, CRANE_ROUTE_LIFT_SAFE_POS},
     { 1015.0f,  -24.10f, CRANE_ROUTE_LIFT_PLACE_POS, CRANE_ROUTE_LIFT_SAFE_POS},
     { 1103.5f,  -12.70f, CRANE_ROUTE_LIFT_PLACE_POS, CRANE_ROUTE_LIFT_SAFE_POS},
     { 1103.5f,    0.10f, CRANE_ROUTE_LIFT_PLACE_POS, CRANE_ROUTE_LIFT_SAFE_POS},
@@ -158,7 +158,7 @@ static float crane_route_upper_place_y[CRANE_ROUTE_SLOT_COUNT + 1U] =
 
 static float crane_route_claw_place_y[CRANE_ROUTE_SLOT_COUNT + 1U] =
 {
-    0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 12.70f, -0.5f, -13.7f, 0.0f
+    0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 12.8f, 0.0f, -12.8f, 0.0f
 };//爪子的放置Y坐标（只有5，6，7号位置）
 
 static float crane_route_lower_place_y[CRANE_ROUTE_SLOT_COUNT + 1U] =
@@ -636,7 +636,7 @@ static void crane_route_prepare_pick(uint8_t pick_index)
 
     /*
      * 首趟取 1/2 时，旋转爪在低位直接转向会与料斗干涉。
-     * 正式比赛中，视觉结果后的 1.5 s 已经让 Z 预先抬升，并在
+     * 正式比赛中，视觉结果后的 0.5 s 已经让 Z 预先抬升，并在
      * Z 到离地高度后开始转向。首趟取 1 号时，正式起步让 X/Y
      * 直接同时前往 1 号目标位，不再经过下绕入口。
      * 首趟 3 号仍走其原有的取物侧下绕流程，不进入本分支。
@@ -913,7 +913,7 @@ void crane_route_process(void)
     uint8_t remaining_gate_mask;
     uint8_t previous_gate_cycle_mask;
 
-    /* 若 1.5 s 内尚未抬到离地高度，正式起步后继续只等待/触发旋转。 */
+    /* 若 0.5 s 内尚未抬到离地高度，正式起步后继续只等待/触发旋转。 */
     crane_route_prestart_process();
 
     switch (crane_route.state)

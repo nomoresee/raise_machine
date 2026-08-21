@@ -64,11 +64,11 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN 0 */
 static float pos_target = 200.0f;
 static float pos_vel = 0.95f;
-static float beam_vel = 1.25f;
-static float upper_hopper_y_vel = 1.15f;
-static float lower_hopper_y_vel = 1.15f;
+static float beam_vel = 1.35f;
+static float upper_hopper_y_vel = 1.25f;
+static float lower_hopper_y_vel = 1.25f;
 /* 升降控制器使用输出端速度单位；30:1 减速后 1.0 会下发为电机侧 30.0。 */
-static float lift_vel = 0.8f;
+static float lift_vel = 0.95f;
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
@@ -307,6 +307,9 @@ int main(void)
     lower_hopper_gate_process();
     vofa_debug_process();
 #endif
+
+
+
 
   }
     /* USER CODE END WHILE */

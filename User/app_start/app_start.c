@@ -18,7 +18,7 @@
  * 4. 路线完成后回到等待按键状态。
  */
 #define APP_START_KEY_DEBOUNCE_MS 250U
-#define APP_START_BUZZER_MS       1500U
+#define APP_START_BUZZER_MS        500U
 #define APP_START_BUZZER_PULSE    1000U  /* TIM12 ARR=1999，对应约 50% 占空比 */
 #if ((CRANE_ROUTE_CHASSIS_ONLY != 0U) || \
      (CRANE_ROUTE_BEAM_PATH_ONLY_DEFAULT != 0U))
@@ -36,7 +36,7 @@
 #define APP_START_MANUAL_DRAW_PACKET \
     "START;PICK=7,8,6;PLACE=3,5,4,1,2;END"
 #endif
-/* 有效视觉结果写入路线后蜂鸣 1.5s，蜂鸣结束立即启动机械。 */
+/* 有效视觉结果写入路线后蜂鸣 0.5s，蜂鸣结束立即启动机械。 */
 #define APP_START_DELAY_MS        APP_START_BUZZER_MS
 #endif
 
